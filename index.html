@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Saldos a cobrar</title>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#14202B">
+<link rel="apple-touch-icon" href="icono-180.png">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#14202B;--navy2:#22313F;--amber:#B45309;--amber2:#F59E0B;--bg:#EEF1F4;--card:#fff;--ink:#14202B;--mut:#64748B;--line:#D9DFE6;--bad:#B91C1C;--ok:#15803D}
+@media(prefers-color-scheme:dark){:root{--bg:#0E161D;--card:#1A2631;--ink:#E8EDF2;--mut:#94A3B8;--line:#2B3947;--amber:#F59E0B;--bad:#F87171;--ok:#4ADE80}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Barlow,system-ui,sans-serif}
+h1,h2,h3,.cond{font-family:'Barlow Condensed',sans-serif;letter-spacing:.02em;margin:0}
+.hero{background:var(--navy);color:#fff;padding:14px 16px;position:relative;overflow:hidden;display:flex;align-items:center;gap:12px}
+.hero:after{content:"";position:absolute;right:-30px;top:0;bottom:0;width:90px;background:var(--amber2);transform:skewX(-20deg);opacity:.9}
+.hero img{width:40px;height:40px;border-radius:10px}.hero h1{font-size:24px}.hero small{color:#B8C4D0;display:block}
+.hero .who{margin-left:auto;z-index:1;text-align:right;font-size:13px;color:#fff;padding-right:70px}
+.hero .who button{margin-top:2px}
+main{max-width:1100px;margin:0 auto;padding:14px 16px 60px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}
+.pill,nav button{border:1.5px solid var(--navy2);background:transparent;color:var(--ink);border-radius:999px;padding:7px 16px;font:600 14px Barlow;cursor:pointer}
+nav button.on,.pill.pri{background:var(--navy);color:#fff;border-color:var(--navy)}
+@media(prefers-color-scheme:dark){nav button.on,.pill.pri{background:var(--amber2);color:#14202B;border-color:var(--amber2)}}
+.pill.sm{padding:3px 11px;font-size:12.5px}.pill.bad{color:var(--bad);border-color:var(--bad)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--amber2);border-radius:14px;padding:10px 14px}
+.kpi b{display:block;font:700 26px 'Barlow Condensed'}.kpi span{color:var(--mut);font-size:13px}
+table{width:100%;border-collapse:collapse}th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font:600 12.5px Barlow;color:var(--mut);text-transform:uppercase}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:10px;border-radius:5px;background:var(--amber2);min-width:2px}.barbg{background:var(--line);border-radius:5px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;max-width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.grow{flex:1;min-width:140px}
+.err{color:var(--bad);font-weight:600;min-height:1.2em}.mut{color:var(--mut)}.bad{color:var(--bad)}.ok{color:var(--ok)}
+.login{max-width:380px;margin:40px auto;padding:0 16px}.login .card{display:grid;gap:10px}
+.com{border-top:1px solid var(--line);padding:8px 0}.com small{color:var(--mut)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:999px;z-index:9}
+.scroll{overflow-x:auto}[hidden]{display:none!important}
+</style></head><body>
+<div id="app"></div><div id="toast" class="toast" hidden></div>
+<script src="config.js"></script>
+<script>
+const $=s=>document.querySelector(s), E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S={tok:null,me:null,d:null,tab:'resumen',q:'',cli:null,carga:false};
+try{S.tok=localStorage.getItem('cob_tok')||sessionStorage.getItem('cob_tok')}catch(e){}
+const money=(n,m)=>(m||'USD')+' '+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0});
+function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3500)}
+async function api(body){
+  if(!window.COBRANZA_API)throw {code:'config',error:'Falta la URL del servidor en config.js'};
+  let r;try{r=await fetch(window.COBRANZA_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:S.tok,...body})})}catch(e){throw {code:'red',error:'No hay conexión con el servidor.'}}
+  let j;try{j=await r.json()}catch(e){throw {code:'resp',error:'Respuesta inválida del servidor.'}}
+  if(!j.ok){if(j.code==='sesion')salir(true);throw j}return j}
+function salir(v){S.tok=null;S.me=null;try{localStorage.removeItem('cob_tok');sessionStorage.removeItem('cob_tok')}catch(e){}if(!v)S.d=null;login()}
+async function init(){
+  try{const b=await api({a:'boot'});if(S.tok){await cargar();return}b.sinUsuarios?setup():login()}catch(e){login(e.error)}}
+function login(msg){$('#app').innerHTML=`<div class="hero"><div><h1>SALDOS A COBRAR</h1><small>Control de cobranza</small></div></div><div class="login"><form class="card" id="f"><h2>Ingresar</h2><input id="u" placeholder="Usuario" autocomplete="username" required><input id="p" type="password" placeholder="Clave" autocomplete="current-password" required><label><input type="checkbox" id="r"> Recordarme en este dispositivo</label><button class="pill pri">Entrar</button><div class="err" id="e">${E(msg||'')}</div></form></div>`;
+  $('#f').onsubmit=async ev=>{ev.preventDefault();try{const j=await api({a:'login',usuario:$('#u').value,clave:$('#p').value,recordar:$('#r').checked});guardarTok(j,$('#r').checked);await cargar()}catch(e){$('#e').textContent=e.error||'Error'}}}
+function guardarTok(j,rec){S.tok=j.token;S.me=j.me;try{(rec?localStorage:sessionStorage).setItem('cob_tok',j.token)}catch(e){}}
+function setup(){$('#app').innerHTML=`<div class="hero"><div><h1>PRIMERA VEZ</h1><small>Creá el usuario administrador</small></div></div><div class="login"><form class="card" id="f"><input id="u" placeholder="Usuario (mín. 3 letras)" required><input id="p" type="password" placeholder="Clave (mín. 6)" required><button class="pill pri">Crear administrador</button><div class="err" id="e"></div></form></div>`;
+  $('#f').onsubmit=async ev=>{ev.preventDefault();try{const j=await api({a:'setup',usuario:$('#u').value,clave:$('#p').value});guardarTok(j,false);await cargar()}catch(e){$('#e').textContent=e.error||'Error'}}}
+async function cargar(){
+  $('#app').innerHTML='<div class="login"><div class="card mut">Cargando datos de la planilla…</div></div>';
+  try{S.d=await api({a:'datos'});S.me=S.d.me;draw()}catch(e){if(e.code!=='sesion')$('#app').innerHTML=`<div class="login"><div class="card"><div class="err">${E(e.error)}</div><button class="pill" onclick="cargar()">Reintentar</button> <button class="pill" onclick="salir()">Salir</button></div></div>`}}
+const admin=()=>S.me&&S.me.rol==='admin';
+const TABS=[['resumen','Resumen'],['clientes','Clientes'],['vendedores','Vendedores',1],['comentarios','Comentarios'],['pagos','Pagos',1],['facturas','Facturas manuales',1],['usuarios','Usuarios',1],['historial','Historial',1]];
+function draw(){
+  const d=S.d;
+  $('#app').innerHTML=`<div class="hero"><img src="icono-192.png" alt=""><div><h1>SALDOS A COBRAR</h1><small>Actualizado ${E(d.ahora.replace('T',' ').slice(0,16))}</small></div><div class="who">${E(S.me.usuario)} · ${E(S.me.rol)}<br><button class="pill sm" style="color:#fff;border-color:#fff" onclick="cambiarClave()">Clave</button> <button class="pill sm" style="color:#fff;border-color:#fff" onclick="salir()">Salir</button></div></div>
+  <main><nav>${TABS.filter(t=>!t[2]||admin()).map(t=>`<button data-t="${t[0]}" class="${S.tab===t[0]?'on':''}">${t[1]}</button>`).join('')}<button onclick="cargar()">↻ Actualizar</button></nav><div id="v"></div></main>`;
+  document.querySelectorAll('nav [data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.cli=null;draw()});
+  ({resumen,clientes,vendedores,comentarios,pagos,facturas,usuarios,historial})[S.tab]()}
+function suma(rows,f){return rows.reduce((a,r)=>(f&&!f(r)?a:a+r.importe),0)}
+function porMon(rows){const o={};rows.forEach(r=>o[r.moneda]=(o[r.moneda]||0)+r.importe);return o}
+function bars(items,mon){const mx=Math.max(1,...items.map(i=>Math.abs(i[1])));return `<table>${items.map(i=>`<tr><td style="width:32%">${E(i[0])}</td><td><div class="barbg"><div class="bar" style="width:${Math.max(1,Math.abs(i[1])/mx*100)}%"></div></div></td><td class="n" style="width:28%">${money(i[1],mon)}</td></tr>`).join('')}</table>`}
+function resumen(){
+  const R=S.d.rows,mons=['USD','ARS'].filter(m=>R.some(r=>r.moneda===m)),cl=new Set(R.map(r=>r.cliente));
+  let h='<div class="kpis">';
+  mons.forEach(m=>{const rm=R.filter(r=>r.moneda===m);h+=`<div class="kpi"><b>${money(suma(rm),m)}</b><span>Saldo total ${m}</span></div><div class="kpi"><b class="bad">${money(suma(rm,r=>r.periodo==='Saldo Vencido'),m)}</b><span>Vencido ${m}</span></div>`});
+  h+=`<div class="kpi"><b>${cl.size}</b><span>Clientes con saldo</span></div></div>`;
+  mons.forEach(m=>{const rm=R.filter(r=>r.moneda===m),per={};rm.forEach(r=>per[r.periodo]=(per[r.periodo]||0)+r.importe);
+    const ks=Object.keys(per).sort((a,b)=>a==='Saldo Vencido'?-1:b==='Saldo Vencido'?1:a<b?-1:1);
+    const emp={};rm.forEach(r=>emp[r.empresa]=(emp[r.empresa]||0)+r.importe);
+    const top={};rm.forEach(r=>top[r.cliente]=(top[r.cliente]||0)+r.importe);
+    h+=`<div class="card"><h3>Por vencimiento · ${m}</h3>${bars(ks.map(k=>[k,per[k]]),m)}</div><div class="card"><h3>Por empresa · ${m}</h3>${bars(Object.entries(emp),m)}</div><div class="card"><h3>10 mayores clientes · ${m}</h3>${bars(Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,10),m)}</div>`});
+  $('#v').innerHTML=h||'<div class="card mut">No hay saldos para mostrar.</div>'}
+function clientesAgg(){const m={};S.d.rows.forEach(r=>{const c=m[r.cliente]||(m[r.cliente]={cliente:r.cliente,vendedor:r.vendedor,mon:{},venc:{}});c.mon[r.moneda]=(c.mon[r.moneda]||0)+r.importe;if(r.periodo==='Saldo Vencido')c.venc[r.moneda]=(c.venc[r.moneda]||0)+r.importe});return Object.values(m).sort((a,b)=>(b.mon.USD||0)-(a.mon.USD||0)||(b.mon.ARS||0)-(a.mon.ARS||0))}
+function fmtM(o){return Object.keys(o).map(m=>money(o[m],m)).join(' · ')||'—'}
+function clientes(){
+  if(S.cli)return detalle();
+  $('#v').innerHTML=`<div class="row"><input class="grow" id="q" placeholder="Buscar cliente o vendedor…" value="${E(S.q)}"></div><div class="card scroll"><table id="t"></table></div>`;
+  const pintar=()=>{const q=S.q.toLowerCase();$('#t').innerHTML='<tr><th>Cliente</th><th>Vendedor</th><th class="n">Saldo</th><th class="n">Vencido</th></tr>'+clientesAgg().filter(c=>!q||(c.cliente+c.vendedor).toLowerCase().includes(q)).map(c=>`<tr style="cursor:pointer" data-c="${E(c.cliente)}"><td>${E(c.cliente)}</td><td>${E(c.vendedor)}</td><td class="n">${fmtM(c.mon)}</td><td class="n bad">${fmtM(c.venc)}</td></tr>`).join('');document.querySelectorAll('[data-c]').forEach(tr=>tr.onclick=()=>{S.cli=tr.dataset.c;clientes()})};
+  $('#q').oninput=e=>{S.q=e.target.value;pintar()};pintar()}
+function detalle(){
+  const c=S.cli,R=S.d.rows.filter(r=>r.cliente===c),F=S.d.facturas.filter(f=>f.cliente===c),C=S.d.comentarios.filter(x=>x.cliente===c).sort((a,b)=>a.ts<b.ts?1:-1);
+  $('#v').innerHTML=`<div class="row"><button class="pill" onclick="S.cli=null;clientes()">← Clientes</button><h2>${E(c)}</h2></div>
+  <div class="card scroll"><h3>Saldos</h3><table><tr><th>Empresa</th><th>Vendedor</th><th>Período</th><th class="n">Importe</th></tr>${R.map(r=>`<tr><td>${E(r.empresa)}</td><td>${E(r.vendedor)}</td><td>${E(r.periodo)}</td><td class="n">${money(r.importe,r.moneda)}</td></tr>`).join('')}</table></div>
+  ${F.length?`<div class="card scroll"><h3>Facturas pendientes (Agro Bayer)</h3><table><tr><th>Factura</th><th>Vto</th><th class="n">Importe</th></tr>${F.map(f=>`<tr><td>${E(f.prefijo)}-${E(f.fc)}</td><td>${E(f.vto)}</td><td class="n">${money(f.importe,f.moneda)}</td></tr>`).join('')}</table></div>`:''}
+  <div class="card"><h3>Comentarios</h3><div class="row"><input class="grow" id="nc" maxlength="1000" placeholder="Escribí un comentario…"><button class="pill pri" id="gc">Guardar</button></div><div id="cl">${comHtml(C)}</div></div>`;
+  $('#gc').onclick=async()=>{const t=$('#nc').value.trim();if(!t)return;try{await api({a:'comentar',cliente:c,texto:t});toast('Comentario guardado');await recargar()}catch(e){toast(e.error)}};bindCom()}
+function comHtml(C,conCli){return C.length?C.map(x=>`<div class="com"><small>${E(x.ts.replace('T',' ').slice(0,16))} · ${E(x.usuario)}${conCli?' · <b>'+E(x.cliente)+'</b>':''}</small><div>${E(x.texto)}</div>${(admin()||x.usuario.toLowerCase()===S.me.usuario.toLowerCase())?`<button class="pill sm bad" data-bc="${E(x.id)}">Borrar</button>`:''}</div>`).join(''):'<div class="mut">Sin comentarios.</div>'}
+function bindCom(){document.querySelectorAll('[data-bc]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Borrar el comentario?'))return;try{await api({a:'borrarComentario',id:b.dataset.bc});await recargar()}catch(e){toast(e.error)}})}
+async function recargar(){try{S.d=await api({a:'datos'});S.me=S.d.me;const t=S.tab,c=S.cli;draw();S.cli=c;if(c&&t==='clientes')clientes()}catch(e){toast(e.error)}}
+function comentarios(){const C=S.d.comentarios.slice().sort((a,b)=>a.ts<b.ts?1:-1);$('#v').innerHTML=`<div class="card"><h3>Todos los comentarios</h3>${comHtml(C,1)}</div>`;bindCom()}
+function vendedores(){const m={};S.d.rows.forEach(r=>{const v=m[r.vendedor]||(m[r.vendedor]={n:new Set(),mon:{},venc:{}});v.n.add(r.cliente);v.mon[r.moneda]=(v.mon[r.moneda]||0)+r.importe;if(r.periodo==='Saldo Vencido')v.venc[r.moneda]=(v.venc[r.moneda]||0)+r.importe});
+  $('#v').innerHTML=`<div class="card scroll"><table><tr><th>Vendedor</th><th class="n">Clientes</th><th class="n">Saldo</th><th class="n">Vencido</th></tr>${Object.entries(m).sort((a,b)=>(b[1].mon.USD||0)-(a[1].mon.USD||0)).map(([k,v])=>`<tr><td>${E(k)}</td><td class="n">${v.n.size}</td><td class="n">${fmtM(v.mon)}</td><td class="n bad">${fmtM(v.venc)}</td></tr>`).join('')}</table></div>`}
+function pagos(){
+  const P=S.d.pagos,F=S.d.facturas;
+  $('#v').innerHTML=`<div class="card scroll"><h3>Facturas Agro Bayer pendientes — marcar como paga</h3><div class="row"><input class="grow" id="qf" placeholder="Filtrar por cliente o número…"></div><table id="tf"></table></div>
+  <div class="card"><h3>Registrar pago — Agrosoluciones / El Paye</h3><div class="row"><select id="pe"><option>Agrosoluciones</option><option>El Paye</option></select><input class="grow" id="pc" list="dl" placeholder="Cliente"><datalist id="dl">${[...new Set(S.d.rows.filter(r=>r.empresa!=='Agro Bayer').map(r=>r.cliente))].map(c=>`<option value="${E(c)}">`).join('')}</datalist><input id="pi" type="number" step="0.01" placeholder="Importe US$"><input id="pf" type="date" value="${new Date().toISOString().slice(0,10)}"><input class="grow" id="pn" placeholder="Nota (opcional)"><button class="pill pri" id="pg">Registrar</button></div><div class="mut">Se descuenta del saldo vencido hasta que lo marques como aplicado en la planilla.</div></div>
+  <div class="card scroll"><h3>Pagos registrados</h3><div class="row"><button class="pill sm" id="ap">Marcar todos los pendientes como ya aplicados en la planilla</button></div><table><tr><th>Fecha</th><th>Empresa</th><th>Cliente / factura</th><th class="n">Importe</th><th>Estado</th><th></th></tr>${P.slice().reverse().map(p=>`<tr><td>${E(p.fecha)}</td><td>${E(p.empresa)}</td><td>${E(p.cliente)}${p.fc?' · '+E(p.fc):''}<br><small class="mut">${E(p.usuario)} ${E(p.nota||'')}</small></td><td class="n">${money(p.importe,p.moneda)}</td><td>${E(p.estado)}</td><td>${p.tipo==='cuenta'?`<button class="pill sm bad" data-bp="${E(p.id)}">Borrar</button>`:''}</td></tr>`).join('')||'<tr><td class="mut">Sin pagos.</td></tr>'}</table></div>`;
+  const pf=()=>{const q=$('#qf').value.toLowerCase();$('#tf').innerHTML='<tr><th>Cliente</th><th>Factura</th><th>Vto</th><th class="n">Importe</th><th></th></tr>'+F.filter(f=>!q||(f.cliente+f.prefijo+'-'+f.fc).toLowerCase().includes(q)).slice(0,150).map(f=>`<tr><td>${E(f.cliente)}</td><td>${E(f.prefijo)}-${E(f.fc)}</td><td>${E(f.vto)}</td><td class="n">${money(f.importe,f.moneda)}</td><td><button class="pill sm" data-f="${f.fila}">Marcar paga</button></td></tr>`).join('');
+    document.querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{const f=F.find(x=>String(x.fila)===b.dataset.f);if(!confirm(`¿Marcar paga ${f.prefijo}-${f.fc} de ${f.cliente}? Se tilda en la solapa Datos.`))return;b.disabled=true;try{await api({a:'pagarFactura',pagado:true,fila:f.fila,fc:f.fc,prefijo:f.prefijo,clienteRaw:f.clienteRaw,cliente:f.cliente,vendedor:f.vendedor,vto:f.vto,moneda:f.moneda,importe:f.importe});toast('Factura marcada como paga');await recargar()}catch(e){toast(e.error);b.disabled=false}})};
+  $('#qf').oninput=pf;pf();
+  $('#pg').onclick=async()=>{try{await api({a:'pagoCuenta',empresa:$('#pe').value,cliente:$('#pc').value,importe:$('#pi').value,fecha:$('#pf').value,nota:$('#pn').value});toast('Pago registrado');await recargar()}catch(e){toast(e.error)}};
+  $('#ap').onclick=async()=>{if(!confirm('¿Ya cargaste estos pagos en la planilla? Dejarán de descontarse del saldo.'))return;try{await api({a:'aplicarPagos'});await recargar()}catch(e){toast(e.error)}};
+  document.querySelectorAll('[data-bp]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Borrar el pago?'))return;try{await api({a:'borrarPago',id:b.dataset.bp});await recargar()}catch(e){toast(e.error)}})}
+function facturas(){
+  const nombres=[...new Set(S.d.facturas.map(f=>f.clienteRaw))].sort();
+  $('#v').innerHTML=`<div class="card"><h3>Cargar factura manual (Agro Bayer)</h3><div class="row"><input id="ff" placeholder="Prefijo-Número (ej. 5-1234)"><input class="grow" id="fcl" list="dc" placeholder="Cliente"><datalist id="dc">${nombres.map(c=>`<option value="${E(c)}">`).join('')}</datalist></div><div class="row"><input id="fv" type="date"><select id="fm"><option>USD</option><option>ARS</option></select><input id="fi" type="number" step="0.01" placeholder="Importe"><button class="pill pri" id="fg">Guardar en Datos</button></div><div class="mut">Se agrega al final de la solapa Datos.</div><div class="err" id="fe"></div></div>`;
+  $('#fg').onclick=async()=>{try{const j=await api({a:'nuevaFactura',fc:$('#ff').value,cliente:$('#fcl').value,vto:$('#fv').value,moneda:$('#fm').value,importe:$('#fi').value});toast('Guardada en la fila '+j.fila+(j.aviso?' · '+j.aviso:''));await recargar()}catch(e){$('#fe').textContent=e.error}}}
+async function usuarios(){
+  $('#v').innerHTML='<div class="card mut">Cargando…</div>';
+  try{const j=await api({a:'usuarios'});
+  $('#v').innerHTML=`<div class="card scroll"><h3>Usuarios</h3><table><tr><th>Usuario</th><th>Rol</th><th>Vendedor</th><th>Activo</th><th>Último ingreso</th><th></th></tr>${j.usuarios.map(u=>`<tr><td>${E(u.usuario)}</td><td>${E(u.rol)}</td><td>${E(u.vendedor)}</td><td>${u.activo?'Sí':'No'}</td><td>${E(String(u.ultimo||'').replace('T',' ').slice(0,16))}</td><td><button class="pill sm" data-e="${E(u.usuario)}">Editar</button> <button class="pill sm bad" data-d="${E(u.usuario)}">Borrar</button></td></tr>`).join('')}</table></div>
+  <div class="card"><h3 id="ut">Nuevo usuario</h3><div class="row"><input id="uu" placeholder="Usuario"><input id="uc" type="password" placeholder="Clave (vacío = no cambiar)"><select id="ur"><option value="vendedor">Vendedor</option><option value="admin">Administrador</option></select><input id="uv" list="dv" placeholder="Vendedor (puede ser más de uno, con coma)"><datalist id="dv">${j.vendedores.map(v=>`<option value="${E(v)}">`).join('')}</datalist><label><input type="checkbox" id="ua" checked> Activo</label><button class="pill pri" id="us">Guardar</button></div><div class="err" id="ue"></div></div>`;
+  document.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{const u=j.usuarios.find(x=>x.usuario===b.dataset.e);$('#uu').value=u.usuario;$('#ur').value=u.rol;$('#uv').value=u.vendedor;$('#ua').checked=u.activo;$('#ut').textContent='Editar '+u.usuario;scrollTo(0,document.body.scrollHeight)});
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Borrar a '+b.dataset.d+'?'))return;try{await api({a:'usuarioBorrar',usuario:b.dataset.d});usuarios()}catch(e){toast(e.error)}});
+  $('#us').onclick=async()=>{try{await api({a:'usuarioGuardar',usuario:$('#uu').value,clave:$('#uc').value,rol:$('#ur').value,vendedor:$('#uv').value,activo:$('#ua').checked});toast('Usuario guardado');usuarios()}catch(e){$('#ue').textContent=e.error}}}catch(e){$('#v').innerHTML=`<div class="card err">${E(e.error)}</div>`}}
+async function historial(){
+  try{const j=await api({a:'historial'}),r=S.d.respaldo;
+  $('#v').innerHTML=`<div class="card"><div class="row"><b>Copia de seguridad:</b> <span>${r&&r.ultimo?E(r.ultimo):(r&&r.error?'<span class="bad">'+E(r.error)+'</span>':'sin copias')}</span><button class="pill sm" id="rb">Hacer copia ahora</button></div><div class="mut">Se guarda una copia de la planilla en la carpeta "Respaldos Cobranza" de Drive, automáticamente una vez al día cuando entra un administrador (se conservan las últimas 14).</div></div><div class="card scroll"><h3>Historial</h3><table><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr>${j.items.map(i=>`<tr><td>${E(String(i.ts).replace('T',' ').slice(0,16))}</td><td>${E(i.usuario)}</td><td>${E(i.accion)}</td><td>${E(i.detalle)}</td></tr>`).join('')}</table></div>`;
+  $('#rb').onclick=async()=>{try{const x=await api({a:'respaldo'});S.d.respaldo=x.respaldo;toast('Copia hecha');historial()}catch(e){toast(e.error)}}}catch(e){$('#v').innerHTML=`<div class="card err">${E(e.error)}</div>`}}
+async function cambiarClave(){const a=prompt('Clave actual:');if(!a)return;const n=prompt('Clave nueva (mín. 6 caracteres):');if(!n)return;try{await api({a:'cambiarClave',actual:a,nueva:n});toast('Clave cambiada')}catch(e){toast(e.error)}}
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+init();
+</script></body></html>
