@@ -77,8 +77,9 @@ function resumen(){
     h+=`<div class="emp"><h2>${E(e)}</h2></div><div class="kpis">`;
     mons.forEach(m=>{const rm=re.filter(r=>r.moneda===m);h+=`<div class="kpi"><b>${money(suma(rm),m)}</b><span>Saldo total ${m}</span></div><div class="kpi"><b class="bad">${money(suma(rm,r=>r.periodo==='Saldo Vencido'),m)}</b><span>Vencido ${m}</span></div>`});
     h+=`<div class="kpi"><b>${cl.size}</b><span>Clientes con saldo</span></div></div>`;
-    mons.forEach(m=>{const top={};re.filter(r=>r.moneda===m).forEach(r=>top[r.cliente]=(top[r.cliente]||0)+r.importe);
-      h+=`<div class="card"><h3>Top 10 saldos · ${E(e)} · ${m}</h3>${bars(Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,10),m)}</div>`})});
+    mons.forEach(m=>{const top={};re.filter(r=>r.moneda===m&&r.periodo==='Saldo Vencido').forEach(r=>top[r.cliente]=(top[r.cliente]||0)+r.importe);
+      const t=Object.entries(top).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      h+=`<div class="card"><h3>Top 10 saldos vencidos · ${E(e)} · ${m}</h3>${t.length?`<table>${t.map((x,i)=>`<tr><td style="width:40px"><b>${i+1}</b></td><td>${E(x[0])}</td><td class="n bad">${money(x[1],m)}</td></tr>`).join('')}</table>`:'<div class="mut">Sin saldos vencidos.</div>'}</div>`})});
   $('#v').innerHTML=h||'<div class="card mut">No hay saldos para mostrar.</div>'}
 function clientesAgg(){const m={};S.d.rows.forEach(r=>{const c=m[r.cliente]||(m[r.cliente]={cliente:r.cliente,vendedor:r.vendedor,mon:{},venc:{}});c.mon[r.moneda]=(c.mon[r.moneda]||0)+r.importe;if(r.periodo==='Saldo Vencido')c.venc[r.moneda]=(c.venc[r.moneda]||0)+r.importe});return Object.values(m).sort((a,b)=>(b.mon.USD||0)-(a.mon.USD||0)||(b.mon.ARS||0)-(a.mon.ARS||0))}
 function fmtM(o){return Object.keys(o).map(m=>money(o[m],m)).join(' · ')||'—'}
