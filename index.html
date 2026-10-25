@@ -41,6 +41,7 @@ input,select,textarea{font:inherit;color:var(--ink);background:var(--card);borde
 <script src="config.js"></script>
 <script>
 const $=s=>document.querySelector(s), E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let ORD={k:'venc',d:-1};try{ORD=JSON.parse(localStorage.getItem('cob_ord'))||ORD}catch(e){}
 const S={tok:null,me:null,d:null,tab:'resumen',q:'',cli:null,carga:false};
 try{S.tok=localStorage.getItem('cob_tok')||sessionStorage.getItem('cob_tok')}catch(e){}
 const fd=x=>{x=String(x||'');const m=x.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);return m?m[3]+'-'+m[2]+'-'+m[1]+(m[4]?' '+m[4]+':'+m[5]:''):x};
@@ -98,9 +99,15 @@ function clientesAgg(){
 function fmtM(o){return Object.keys(o).map(m=>money(o[m],m)).join(' · ')||'—'}
 function clientes(){
   if(S.cli)return detalle();
-  $('#v').innerHTML=`<div class="row"><input class="grow" id="q" placeholder="Buscar cliente, vendedor o empresa…" value="${E(S.q)}"></div><div class="card scroll"><table id="t"></table></div><div class="mut" style="font-size:13px">Agro Bayer: días y vencimientos exactos por factura (a 30 días = vence en los próximos 30; a 60 = entre 31 y 60). Agrosoluciones y El Paye vienen por mes: "a 30 días" suma el mes en curso y el siguiente, "a 60 días" el mes subsiguiente, y los días vencidos no están disponibles.</div>`;
+  $('#v').innerHTML=`<div class="row"><input class="grow" id="q" placeholder="Buscar cliente, vendedor o empresa…" value="${E(S.q)}"></div><div class="card scroll"><table id="t"></table></div><div class="mut" style="font-size:13px">Tocá el título de una columna para ordenar (otra vez para invertir). En las columnas de importes se ordena dentro de cada moneda. Agro Bayer: días y vencimientos exactos por factura (a 30 días = vence en los próximos 30; a 60 = entre 31 y 60). Agrosoluciones y El Paye vienen por mes: "a 30 días" suma el mes en curso y el siguiente, "a 60 días" el mes subsiguiente, y los días vencidos no están disponibles.</div>`;
   const n=(v,m)=>v?money(v,m):'—';
-  const pintar=()=>{const q=S.q.toLowerCase();$('#t').innerHTML='<tr><th>Cliente</th><th>Empresa</th><th>Vendedor</th><th class="n">Saldo vencido</th><th class="n">Días vencido</th><th class="n">A vencer 30 días</th><th class="n">A vencer 60 días</th></tr>'+clientesAgg().filter(c=>!q||(c.cliente+c.vendedor+c.empresa).toLowerCase().includes(q)).map(c=>`<tr style="cursor:pointer" data-c="${E(c.cliente)}"><td>${E(c.cliente)}</td><td>${E(c.empresa)}</td><td>${E(c.vendedor)}</td><td class="n ${c.venc>0?'bad':''}">${n(c.venc,c.moneda)}</td><td class="n ${c.dias?'bad':''}">${c.dias?c.dias+' d':'—'}</td><td class="n">${n(c.a30,c.moneda)}</td><td class="n">${n(c.a60,c.moneda)}</td></tr>`).join('');document.querySelectorAll('[data-c]').forEach(tr=>tr.onclick=()=>{S.cli=tr.dataset.c;clientes()})};
+  const COLS=[['cliente','Cliente'],['empresa','Empresa'],['vendedor','Vendedor'],['venc','Saldo vencido',1],['dias','Días vencido',1],['a30','A vencer 30 días',1],['a60','A vencer 60 días',1]];
+  const pintar=()=>{const q=S.q.toLowerCase(),num=COLS.find(c=>c[0]===ORD.k)[2];
+    const L=clientesAgg().filter(c=>!q||(c.cliente+c.vendedor+c.empresa).toLowerCase().includes(q));
+    L.sort((a,b)=>{let r;if(num){r=(a.moneda<b.moneda?1:a.moneda>b.moneda?-1:0);if(r)return r;r=((a[ORD.k]||0)-(b[ORD.k]||0))*ORD.d}else r=String(a[ORD.k]).localeCompare(String(b[ORD.k]),'es',{sensitivity:'base'})*ORD.d;return r||a.cliente.localeCompare(b.cliente,'es')});
+    $('#t').innerHTML='<tr>'+COLS.map(c=>`<th data-k="${c[0]}" class="${c[2]?'n':''}" style="cursor:pointer;user-select:none">${c[1]}${ORD.k===c[0]?(ORD.d>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>'+L.map(c=>`<tr style="cursor:pointer" data-c="${E(c.cliente)}"><td>${E(c.cliente)}</td><td>${E(c.empresa)}</td><td>${E(c.vendedor)}</td><td class="n ${c.venc>0?'bad':''}">${n(c.venc,c.moneda)}</td><td class="n ${c.dias?'bad':''}">${c.dias?c.dias+' d':'—'}</td><td class="n">${n(c.a30,c.moneda)}</td><td class="n">${n(c.a60,c.moneda)}</td></tr>`).join('');
+    document.querySelectorAll('#t th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;ORD=ORD.k===k?{k,d:-ORD.d}:{k,d:COLS.find(c=>c[0]===k)[2]?-1:1};try{localStorage.setItem('cob_ord',JSON.stringify(ORD))}catch(e){}pintar()});
+    document.querySelectorAll('#t [data-c]').forEach(tr=>tr.onclick=()=>{S.cli=tr.dataset.c;clientes()})};
   $('#q').oninput=e=>{S.q=e.target.value;pintar()};pintar()}
 function detalle(){
   const c=S.cli,R=S.d.rows.filter(r=>r.cliente===c),F=S.d.facturas.filter(f=>f.cliente===c),C=S.d.comentarios.filter(x=>x.cliente===c).sort((a,b)=>a.ts<b.ts?1:-1);
