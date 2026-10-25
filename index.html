@@ -44,6 +44,7 @@ const $=s=>document.querySelector(s), E=s=>String(s==null?'':s).replace(/[&<>"']
 const S={tok:null,me:null,d:null,tab:'resumen',q:'',cli:null,carga:false};
 try{S.tok=localStorage.getItem('cob_tok')||sessionStorage.getItem('cob_tok')}catch(e){}
 const fd=x=>{x=String(x||'');const m=x.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);return m?m[3]+'-'+m[2]+'-'+m[1]+(m[4]?' '+m[4]+':'+m[5]:''):x};
+const fp=x=>{const m=String(x||'').match(/^(\d{4})-(\d{2})$/);return m?m[2]+'-'+m[1]:x};
 const money=(n,m)=>(m||'USD')+' '+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0});
 function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3500)}
 async function api(body){
@@ -103,7 +104,7 @@ function clientes(){
 function detalle(){
   const c=S.cli,R=S.d.rows.filter(r=>r.cliente===c),F=S.d.facturas.filter(f=>f.cliente===c),C=S.d.comentarios.filter(x=>x.cliente===c).sort((a,b)=>a.ts<b.ts?1:-1);
   $('#v').innerHTML=`<div class="row"><button class="pill" onclick="S.cli=null;clientes()">← Clientes</button><h2>${E(c)}</h2></div>
-  <div class="card scroll"><h3>Saldos</h3><table><tr><th>Empresa</th><th>Vendedor</th><th>Período</th><th class="n">Importe</th></tr>${R.map(r=>`<tr><td>${E(r.empresa)}</td><td>${E(r.vendedor)}</td><td>${E(r.periodo)}</td><td class="n">${money(r.importe,r.moneda)}</td></tr>`).join('')}</table></div>
+  <div class="card scroll"><h3>Saldos</h3><table><tr><th>Empresa</th><th>Vendedor</th><th>Período</th><th class="n">Importe</th></tr>${R.map(r=>`<tr><td>${E(r.empresa)}</td><td>${E(r.vendedor)}</td><td>${E(fp(r.periodo))}</td><td class="n">${money(r.importe,r.moneda)}</td></tr>`).join('')}</table></div>
   ${F.length?`<div class="card scroll"><h3>Facturas pendientes (Agro Bayer)</h3><table><tr><th>Factura</th><th>Vto</th><th class="n">Importe</th></tr>${F.map(f=>`<tr><td>${E(f.prefijo)}-${E(f.fc)}</td><td>${E(fd(f.vto))}</td><td class="n">${money(f.importe,f.moneda)}</td></tr>`).join('')}</table></div>`:''}
   <div class="card"><h3>Comentarios</h3><div class="row"><input class="grow" id="nc" maxlength="1000" placeholder="Escribí un comentario…"><button class="pill pri" id="gc">Guardar</button></div><div id="cl">${comHtml(C)}</div></div>`;
   $('#gc').onclick=async()=>{const t=$('#nc').value.trim();if(!t)return;try{await api({a:'comentar',cliente:c,texto:t});toast('Comentario guardado');await recargar()}catch(e){toast(e.error)}};bindCom()}
