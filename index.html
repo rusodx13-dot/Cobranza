@@ -79,12 +79,24 @@ function colRes(e,m,tit){
   <div class="card"><h3>Top 10 saldos vencidos</h3>${t.length?`<table>${t.map((x,i)=>`<tr><td style="width:36px"><b>${i+1}</b></td><td>${E(x[0])}</td><td class="n bad">${money(x[1],m)}</td></tr>`).join('')}</table>`:'<div class="mut">Sin saldos vencidos.</div>'}</div></div>`}
 function resumen(){
   $('#v').innerHTML=`<div class="two">${colRes('Agro Bayer','USD','Agro Bayer · Dólares')}${colRes('Agro Bayer','ARS','Agro Bayer · Pesos')}</div><div class="two">${colRes('El Paye','USD','El Paye')}${colRes('Agrosoluciones','USD','Agrosoluciones')}</div>`}
-function clientesAgg(){const m={};S.d.rows.forEach(r=>{const c=m[r.cliente]||(m[r.cliente]={cliente:r.cliente,vendedor:r.vendedor,mon:{},venc:{}});c.mon[r.moneda]=(c.mon[r.moneda]||0)+r.importe;if(r.periodo==='Saldo Vencido')c.venc[r.moneda]=(c.venc[r.moneda]||0)+r.importe});return Object.values(m).sort((a,b)=>(b.mon.USD||0)-(a.mon.USD||0)||(b.mon.ARS||0)-(a.mon.ARS||0))}
-function fmtM(o){return Object.keys(o).map(m=>money(o[m],m)).join(' · ')||'—'}
+const D0=x=>Date.UTC(+x.slice(0,4),+x.slice(5,7)-1,+x.slice(8,10));
+const sumYm=(ym,n)=>{const d=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5,7)-1+n,1));return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')};
+function clientesAgg(){
+  const hoy=S.d.ahora.slice(0,10),h0=D0(hoy),ym=S.d.hoyYm,m={};
+  const g=(c,e,mo,v)=>m[c+'|'+e+'|'+mo]||(m[c+'|'+e+'|'+mo]={cliente:c,empresa:e,moneda:mo,vendedor:v,venc:0,dias:null,a30:0,a60:0});
+  S.d.rows.forEach(r=>{const x=g(r.cliente,r.empresa,r.moneda,r.vendedor);
+    if(r.empresa==='Agro Bayer')return;
+    if(r.periodo==='Saldo Vencido')x.venc+=r.importe;
+    else if(r.periodo===ym||r.periodo===sumYm(ym,1))x.a30+=r.importe;
+    else if(r.periodo===sumYm(ym,2))x.a60+=r.importe});
+  S.d.facturas.forEach(f=>{const x=g(f.cliente,'Agro Bayer',f.moneda,f.vendedor),d=Math.round((h0-D0(f.vto))/864e5);
+    if(d>0){x.venc+=f.importe;x.dias=Math.max(x.dias||0,d)}else if(d>=-30)x.a30+=f.importe;else if(d>=-60)x.a60+=f.importe});
+  return Object.values(m).filter(x=>x.venc||x.a30||x.a60).sort((a,b)=>(a.moneda<b.moneda?1:a.moneda>b.moneda?-1:0)||b.venc-a.venc)}
 function clientes(){
   if(S.cli)return detalle();
-  $('#v').innerHTML=`<div class="row"><input class="grow" id="q" placeholder="Buscar cliente o vendedor…" value="${E(S.q)}"></div><div class="card scroll"><table id="t"></table></div>`;
-  const pintar=()=>{const q=S.q.toLowerCase();$('#t').innerHTML='<tr><th>Cliente</th><th>Vendedor</th><th class="n">Saldo</th><th class="n">Vencido</th></tr>'+clientesAgg().filter(c=>!q||(c.cliente+c.vendedor).toLowerCase().includes(q)).map(c=>`<tr style="cursor:pointer" data-c="${E(c.cliente)}"><td>${E(c.cliente)}</td><td>${E(c.vendedor)}</td><td class="n">${fmtM(c.mon)}</td><td class="n bad">${fmtM(c.venc)}</td></tr>`).join('');document.querySelectorAll('[data-c]').forEach(tr=>tr.onclick=()=>{S.cli=tr.dataset.c;clientes()})};
+  $('#v').innerHTML=`<div class="row"><input class="grow" id="q" placeholder="Buscar cliente, vendedor o empresa…" value="${E(S.q)}"></div><div class="card scroll"><table id="t"></table></div><div class="mut" style="font-size:13px">Agro Bayer: días y vencimientos exactos por factura (a 30 días = vence en los próximos 30; a 60 = entre 31 y 60). Agrosoluciones y El Paye vienen por mes: "a 30 días" suma el mes en curso y el siguiente, "a 60 días" el mes subsiguiente, y los días vencidos no están disponibles.</div>`;
+  const n=(v,m)=>v?money(v,m):'—';
+  const pintar=()=>{const q=S.q.toLowerCase();$('#t').innerHTML='<tr><th>Cliente</th><th>Empresa</th><th>Vendedor</th><th class="n">Saldo vencido</th><th class="n">Días vencido</th><th class="n">A vencer 30 días</th><th class="n">A vencer 60 días</th></tr>'+clientesAgg().filter(c=>!q||(c.cliente+c.vendedor+c.empresa).toLowerCase().includes(q)).map(c=>`<tr style="cursor:pointer" data-c="${E(c.cliente)}"><td>${E(c.cliente)}</td><td>${E(c.empresa)}</td><td>${E(c.vendedor)}</td><td class="n ${c.venc>0?'bad':''}">${n(c.venc,c.moneda)}</td><td class="n ${c.dias?'bad':''}">${c.dias?c.dias+' d':'—'}</td><td class="n">${n(c.a30,c.moneda)}</td><td class="n">${n(c.a60,c.moneda)}</td></tr>`).join('');document.querySelectorAll('[data-c]').forEach(tr=>tr.onclick=()=>{S.cli=tr.dataset.c;clientes()})};
   $('#q').oninput=e=>{S.q=e.target.value;pintar()};pintar()}
 function detalle(){
   const c=S.cli,R=S.d.rows.filter(r=>r.cliente===c),F=S.d.facturas.filter(f=>f.cliente===c),C=S.d.comentarios.filter(x=>x.cliente===c).sort((a,b)=>a.ts<b.ts?1:-1);
