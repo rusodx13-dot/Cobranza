@@ -95,6 +95,7 @@ function clientesAgg(){
   S.d.facturas.forEach(f=>{const x=g(f.cliente,'Agro Bayer',f.moneda,f.vendedor),d=Math.round((h0-D0(f.vto))/864e5);
     if(d>0){x.venc+=f.importe;x.dias=Math.max(x.dias||0,d)}else if(d>=-30)x.a30+=f.importe;else if(d>=-60)x.a60+=f.importe});
   return Object.values(m).filter(x=>x.venc||x.a30||x.a60).sort((a,b)=>(a.moneda<b.moneda?1:a.moneda>b.moneda?-1:0)||b.venc-a.venc)}
+function fmtM(o){return Object.keys(o).map(m=>money(o[m],m)).join(' · ')||'—'}
 function clientes(){
   if(S.cli)return detalle();
   $('#v').innerHTML=`<div class="row"><input class="grow" id="q" placeholder="Buscar cliente, vendedor o empresa…" value="${E(S.q)}"></div><div class="card scroll"><table id="t"></table></div><div class="mut" style="font-size:13px">Agro Bayer: días y vencimientos exactos por factura (a 30 días = vence en los próximos 30; a 60 = entre 31 y 60). Agrosoluciones y El Paye vienen por mes: "a 30 días" suma el mes en curso y el siguiente, "a 60 días" el mes subsiguiente, y los días vencidos no están disponibles.</div>`;
@@ -105,7 +106,7 @@ function detalle(){
   const c=S.cli,R=S.d.rows.filter(r=>r.cliente===c),F=S.d.facturas.filter(f=>f.cliente===c),C=S.d.comentarios.filter(x=>x.cliente===c).sort((a,b)=>a.ts<b.ts?1:-1);
   $('#v').innerHTML=`<div class="row"><button class="pill" onclick="S.cli=null;clientes()">← Clientes</button><h2>${E(c)}</h2></div>
   <div class="card scroll"><h3>Saldos</h3><table><tr><th>Empresa</th><th>Vendedor</th><th>Período</th><th class="n">Importe</th></tr>${R.map(r=>`<tr><td>${E(r.empresa)}</td><td>${E(r.vendedor)}</td><td>${E(fp(r.periodo))}</td><td class="n">${money(r.importe,r.moneda)}</td></tr>`).join('')}</table></div>
-  ${F.length?`<div class="card scroll"><h3>Facturas pendientes (Agro Bayer)</h3><table><tr><th>Factura</th><th>Vto</th><th class="n">Importe</th></tr>${F.map(f=>`<tr><td>${E(f.prefijo)}-${E(f.fc)}</td><td>${E(fd(f.vto))}</td><td class="n">${money(f.importe,f.moneda)}</td></tr>`).join('')}</table></div>`:''}
+  ${F.length?`<div class="card scroll"><h3>Facturas pendientes (Agro Bayer)</h3><table><tr><th>Factura</th><th>Vto</th><th class="n">Días vencido</th><th class="n">Importe</th></tr>${F.slice().sort((a,b)=>a.vto<b.vto?-1:1).map(f=>{const d=Math.round((D0(S.d.ahora.slice(0,10))-D0(f.vto))/864e5);return `<tr><td>${E(f.prefijo)}-${E(f.fc)}</td><td>${E(fd(f.vto))}</td><td class="n ${d>0?'bad':''}">${d>0?d+' d':'vence en '+(-d)+' d'}</td><td class="n">${money(f.importe,f.moneda)}</td></tr>`}).join('')}</table></div>`:''}
   <div class="card"><h3>Comentarios</h3><div class="row"><input class="grow" id="nc" maxlength="1000" placeholder="Escribí un comentario…"><button class="pill pri" id="gc">Guardar</button></div><div id="cl">${comHtml(C)}</div></div>`;
   $('#gc').onclick=async()=>{const t=$('#nc').value.trim();if(!t)return;try{await api({a:'comentar',cliente:c,texto:t});toast('Comentario guardado');await recargar()}catch(e){toast(e.error)}};bindCom()}
 function comHtml(C,conCli){return C.length?C.map(x=>`<div class="com"><small>${E(fd(x.ts))} · ${E(x.usuario)}${conCli?' · <b>'+E(x.cliente)+'</b>':''}</small><div>${E(x.texto)}</div>${(admin()||x.usuario.toLowerCase()===S.me.usuario.toLowerCase())?`<button class="pill sm bad" data-bc="${E(x.id)}">Borrar</button>`:''}</div>`).join(''):'<div class="mut">Sin comentarios.</div>'}
