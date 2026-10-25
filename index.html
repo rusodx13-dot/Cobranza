@@ -37,6 +37,7 @@ input,select,textarea{font:inherit;color:var(--ink);background:var(--card);borde
 .emp{border-bottom:3px solid var(--amber2);margin:18px 0 10px;padding-bottom:2px}.emp h2{font-size:28px;text-transform:uppercase}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px}.colres{min-width:0}.colres .kpis{grid-template-columns:1fr 1fr}@media(max-width:760px){.two{grid-template-columns:1fr}}.scroll{overflow-x:auto}[hidden]{display:none!important}
 </style></head><body>
 <div id="app"></div><div id="toast" class="toast" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 <script>
 const $=s=>document.querySelector(s), E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -62,13 +63,13 @@ async function cargar(){
   $('#app').innerHTML='<div class="login"><div class="card mut">Cargando datos de la planilla…</div></div>';
   try{S.d=await api({a:'datos'});S.me=S.d.me;draw()}catch(e){if(e.code!=='sesion')$('#app').innerHTML=`<div class="login"><div class="card"><div class="err">${E(e.error)}</div><button class="pill" onclick="cargar()">Reintentar</button> <button class="pill" onclick="salir()">Salir</button></div></div>`}}
 const admin=()=>S.me&&S.me.rol==='admin';
-const TABS=[['resumen','Resumen'],['clientes','Clientes'],['vendedores','Vendedores',1],['comentarios','Comentarios'],['pagos','Pagos',1],['facturas','Facturas manuales',1],['usuarios','Usuarios',1],['historial','Historial',1]];
+const TABS=[['resumen','Resumen'],['clientes','Clientes'],['vendedores','Vendedores',1],['comentarios','Comentarios'],['pagos','Pagos',1],['facturas','Facturas manuales',1],['carga','Carga masiva',1],['usuarios','Usuarios',1],['historial','Historial',1]];
 function draw(){
   const d=S.d;
   $('#app').innerHTML=`<div class="hero"><img src="icono-192.png" alt=""><div><h1>SALDOS A COBRAR</h1><small>Actualizado ${E(fd(d.ahora))}</small></div><div class="who">${E(S.me.usuario)} · ${E(S.me.rol)}<br>${admin()?'<button class="pill sm" style="color:#fff;border-color:#fff" onclick="cambiarClave()">Clave</button> ':''}<button class="pill sm" style="color:#fff;border-color:#fff" onclick="salir()">Salir</button></div></div>
   <main><nav>${TABS.filter(t=>!t[2]||admin()).map(t=>`<button data-t="${t[0]}" class="${S.tab===t[0]?'on':''}">${t[1]}</button>`).join('')}<button onclick="cargar()">↻ Actualizar</button></nav><div id="v"></div></main>`;
   document.querySelectorAll('nav [data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.cli=null;draw()});
-  ({resumen,clientes,vendedores,comentarios,pagos,facturas,usuarios,historial})[S.tab]()}
+  ({resumen,clientes,vendedores,comentarios,pagos,facturas,carga,usuarios,historial})[S.tab]()}
 function suma(rows,f){return rows.reduce((a,r)=>(f&&!f(r)?a:a+r.importe),0)}
 function porMon(rows){const o={};rows.forEach(r=>o[r.moneda]=(o[r.moneda]||0)+r.importe);return o}
 function bars(items,mon){const mx=Math.max(1,...items.map(i=>Math.abs(i[1])));return `<table>${items.map(i=>`<tr><td style="width:32%">${E(i[0])}</td><td><div class="barbg"><div class="bar" style="width:${Math.max(1,Math.abs(i[1])/mx*100)}%"></div></div></td><td class="n" style="width:28%">${money(i[1],mon)}</td></tr>`).join('')}</table>`}
@@ -133,6 +134,43 @@ function facturas(){
   const nombres=[...new Set(S.d.facturas.map(f=>f.clienteRaw))].sort();
   $('#v').innerHTML=`<div class="card"><h3>Cargar factura manual (Agro Bayer)</h3><div class="row"><input id="ff" placeholder="Prefijo-Número (ej. 5-1234)"><input class="grow" id="fcl" list="dc" placeholder="Cliente"><datalist id="dc">${nombres.map(c=>`<option value="${E(c)}">`).join('')}</datalist></div><div class="row"><input id="fv" type="date"><select id="fm"><option>USD</option><option>ARS</option></select><input id="fi" type="number" step="0.01" placeholder="Importe"><button class="pill pri" id="fg">Guardar en Datos</button></div><div class="mut">Se agrega al final de la solapa Datos.</div><div class="err" id="fe"></div></div>`;
   $('#fg').onclick=async()=>{try{const j=await api({a:'nuevaFactura',fc:$('#ff').value,cliente:$('#fcl').value,vto:$('#fv').value,moneda:$('#fm').value,importe:$('#fi').value});toast('Guardada en la fila '+j.fila+(j.aviso?' · '+j.aviso:''));await recargar()}catch(e){$('#fe').textContent=e.error}}}
+
+/* ---- carga masiva por Excel ---- */
+const numAR=v=>{if(typeof v==='number')return v;let t=String(v==null?'':v).trim().replace(/\s/g,'').replace(/^\$/,'');if(!t)return 0;const neg=/^\(.*\)$/.test(t);t=t.replace(/[()]/g,'');if(t.includes(','))t=t.replace(/\./g,'').replace(',','.');const x=parseFloat(t);return isNaN(x)?NaN:(neg?-x:x)};
+const isoDe=v=>{if(v instanceof Date&&!isNaN(v))return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');if(typeof v==='number'&&v>20000){const d=new Date(Math.round((v-25569)*864e5));return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0')}const m=String(v||'').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');return /^\d{4}-\d{2}-\d{2}$/.test(String(v||'').trim())?String(v).trim():''};
+async function leerXlsx(file){if(!window.XLSX)throw {error:'No se pudo cargar el lector de Excel (¿sin internet?).'};const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''})}
+const norm=x=>String(x==null?'':x).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const CG={f:null,s:null};
+function carga(){
+  $('#v').innerHTML=`<div class="card"><h3>Facturas Agro Bayer desde Excel</h3><div class="mut">Columnas: Prefijo, FC, Cliente, Vto, Moneda (USD o ARS), Importe. Se agregan al final de la solapa Datos; las que ya existen (mismo prefijo, FC y cliente) se omiten.</div><div class="row" style="margin-top:8px"><input type="file" id="xf" accept=".xlsx,.xls,.csv"><button class="pill sm" id="mf">Descargar modelo</button></div><div id="pf"></div></div>
+  <div class="card"><h3>Actualizar saldos de Agrosoluciones / El Paye</h3><div class="mut">El Excel debe tener el mismo formato que la solapa (Cuenta, Codigo, Vendedor, Venta, Sucursal, SdoAnt, un mes por columna, Total). <b>Reemplaza todo el contenido de la solapa</b>; antes se guarda una copia de la planilla en Drive.</div><div class="row" style="margin-top:8px"><select id="se"><option>Agrosoluciones</option><option>El Paye</option></select><input type="file" id="sx" accept=".xlsx,.xls,.csv"></div><div id="ps"></div></div>`;
+  $('#mf').onclick=()=>{const w=XLSX.utils.book_new();XLSX.utils.book_append_sheet(w,XLSX.utils.aoa_to_sheet([['Prefijo','FC','Cliente','Vto','Moneda','Importe'],['3014','1234','NOMBRE DEL CLIENTE','31/12/2026','USD',1500.5]]),'Facturas');XLSX.writeFile(w,'modelo-facturas-agro-bayer.xlsx')};
+  $('#xf').onchange=async e=>{const box=$('#pf');CG.f=null;if(!e.target.files[0])return;try{
+    const A=await leerXlsx(e.target.files[0]),H=(A[0]||[]).map(norm),ix=n=>H.findIndex(h=>n.includes(h)),c={pre:ix(['prefijo']),fc:ix(['fc','factura','comprobante','numero']),cli:ix(['cliente','cuenta']),vto:ix(['vto','vencimiento']),mon:ix(['moneda']),imp:ix(['importe','monto','saldo'])};
+    const falta=Object.entries({Prefijo:c.pre,FC:c.fc,Cliente:c.cli,Vto:c.vto,Importe:c.imp}).filter(x=>x[1]<0).map(x=>x[0]);
+    if(falta.length)throw {error:'Faltan columnas: '+falta.join(', ')+'. Descargá el modelo.'};
+    const ok=[],errs=[];
+    A.slice(1).forEach((r,i)=>{if(!r.some(x=>String(x).trim()!==''))return;const it={prefijo:String(r[c.pre]).trim(),fc:String(r[c.fc]).trim(),cliente:String(r[c.cli]).trim(),vto:isoDe(r[c.vto]),moneda:c.mon>=0&&/^(ars|\$|pesos?)$/i.test(String(r[c.mon]).trim())?'ARS':'USD',importe:numAR(r[c.imp])};
+      const m=[];if(!it.cliente)m.push('sin cliente');if(!it.vto)m.push('vencimiento inválido');if(!isFinite(it.importe)||it.importe===0)m.push('importe inválido');m.length?errs.push(`Fila ${i+2}: ${m.join(', ')}`):ok.push(it)});
+    CG.f=ok;
+    box.innerHTML=`<p><b>${ok.length}</b> facturas listas${errs.length?` · <span class="bad">${errs.length} con errores (no se cargan)</span>`:''}</p>${errs.length?`<div class="bad" style="font-size:13px">${errs.slice(0,8).map(E).join('<br>')}${errs.length>8?'<br>…':''}</div>`:''}<div class="scroll"><table><tr><th>Factura</th><th>Cliente</th><th>Vto</th><th>Mon.</th><th class="n">Importe</th></tr>${ok.slice(0,8).map(f=>`<tr><td>${E(f.prefijo)}-${E(f.fc)}</td><td>${E(f.cliente)}</td><td>${E(fd(f.vto))}</td><td>${f.moneda}</td><td class="n">${money(f.importe,f.moneda)}</td></tr>`).join('')}</table></div>${ok.length>8?`<div class="mut">…y ${ok.length-8} más</div>`:''}${ok.length?'<div class="row" style="margin-top:8px"><button class="pill pri" id="cf">Cargar en Datos</button></div>':''}<div class="err" id="ef"></div>`;
+    if(ok.length)$('#cf').onclick=async()=>{if(ok.length>500){$('#ef').textContent='Máximo 500 por carga.';return}if(!confirm(`¿Cargar ${ok.length} facturas en la solapa Datos?`))return;$('#cf').disabled=true;try{const j=await api({a:'cargaFacturas',items:ok});toast(`Cargadas ${j.cargadas}`+(j.duplicadas?` · ${j.duplicadas} repetidas omitidas`:'')+(j.sinVendedor?` · ${j.sinVendedor} sin vendedor (cliente no está en Vendedores)`:''));await recargar();S.tab='carga';draw()}catch(er){$('#ef').textContent=er.error;$('#cf').disabled=false}};
+  }catch(er){box.innerHTML=`<div class="err">${E(er.error||er.message)}</div>`}};
+  $('#sx').onchange=async e=>{const box=$('#ps');CG.s=null;if(!e.target.files[0])return;try{
+    const A=await leerXlsx(e.target.files[0]);if(A.length<2)throw {error:'El Excel está vacío.'};
+    const H=A[0].map((h,i)=>h instanceof Date?h.getFullYear()+'/'+(h.getMonth()+1):String(h).trim()),n=H.length,Hn=H.map(norm),ic=Hn.indexOf('cuenta'),iv=Hn.indexOf('vendedor'),is=Hn.indexOf('sdoant');
+    if(ic<0||iv<0||is<0)throw {error:'El Excel debe tener las columnas Cuenta, Vendedor y SdoAnt (mismo formato que la solapa).'};
+    const per=H.map((h,i)=>/^\d{4}[\/-]\d{1,2}$/.test(h)?i:-1).filter(i=>i>=0);if(!per.length)throw {error:'No encontré columnas de meses (ej. 2026/10).'};
+    const numCols=new Set([is,...per,Hn.indexOf('total'),Hn.indexOf('codigo')].filter(i=>i>=0));
+    const rows=[];let bad=0,tot=0;
+    A.slice(1).forEach(r=>{if(!String(r[ic]).trim())return;const o=[];for(let j=0;j<n;j++){let v=r[j];if(numCols.has(j)){const x=numAR(v);if(!isFinite(x)){bad++;o.push(0)}else o.push(x)}else o.push(v instanceof Date?isoDe(v):String(v==null?'':v).trim())}rows.push(o);tot+=[is,...per].reduce((a,j)=>a+o[j],0)});
+    if(!rows.length)throw {error:'No hay cuentas con datos.'};
+    const emp=$('#se').value,act=S.d.rows.filter(r=>r.empresa===emp).reduce((a,r)=>a+r.importe,0);
+    CG.s={rows,header:H};
+    box.innerHTML=`<p><b>${rows.length}</b> cuentas · columnas: ${E(H.join(', '))}</p><p>Saldo total actual de <b>${E(emp)}</b>: ${money(act,'USD')} → con el Excel nuevo: <b>${money(tot,'USD')}</b>${bad?` · <span class="bad">${bad} celdas no numéricas se cargarán como 0</span>`:''}</p><label><input type="checkbox" id="sp" checked> Pasar a "aplicados" los pagos pendientes de ${E(emp)} (el Excel nuevo ya los incluye)</label><div class="row" style="margin-top:8px"><button class="pill pri" id="cs">Reemplazar saldos de ${E(emp)}</button></div><div class="err" id="es"></div>`;
+    $('#cs').onclick=async()=>{if(!confirm(`Se reemplaza TODO el contenido de la solapa ${emp} por ${rows.length} cuentas. Se hace antes una copia de la planilla en Drive. ¿Seguir?`))return;$('#cs').disabled=true;toast('Actualizando… puede demorar unos segundos');try{const j=await api({a:'actualizarSaldos',empresa:emp,header:H,rows,aplicarPagos:$('#sp').checked});toast(`Saldos de ${emp} actualizados: ${j.filas} cuentas`);await recargar();S.tab='carga';draw()}catch(er){$('#es').textContent=er.error;$('#cs').disabled=false}};
+  }catch(er){box.innerHTML=`<div class="err">${E(er.error||er.message)}</div>`}};
+  $('#se').onchange=()=>{$('#sx').value='';$('#ps').innerHTML=''}}
 async function usuarios(){
   $('#v').innerHTML='<div class="card mut">Cargando…</div>';
   try{const j=await api({a:'usuarios'});
