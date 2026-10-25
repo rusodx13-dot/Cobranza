@@ -120,25 +120,34 @@ function detalle(){
 
 function panelPago(c,R,F){
   const emps=[...new Set(R.map(r=>r.empresa))],hoy=S.d.ahora.slice(0,10),box=$('#pp');
-  box.innerHTML=`<h3>Registrar pago de este cliente</h3><div class="row"><select id="qe">${emps.map(e=>`<option>${E(e)}</option>`).join('')}</select><select id="qm"></select><input id="qi" type="number" step="0.01" placeholder="Importe del pago"><input id="qf2" type="date" value="${hoy}"><input class="grow" id="qn" placeholder="Nota (opcional)"></div><div id="qv"></div><div class="err" id="qr"></div>`;
-  let plan=null;
-  const cents=x=>Math.round(x*100);
-  const pintar=()=>{const e=$('#qe').value;const ms=e==='Agro Bayer'?[...new Set(F.map(f=>f.moneda))]:['USD'];const mm=$('#qm');const prev=mm.value;mm.innerHTML=ms.map(m=>`<option>${m}</option>`).join('');if(ms.includes(prev))mm.value=prev;calc()};
+  const favs=(S.d.pagos||[]).filter(p=>p.tipo==='favor'&&p.estado!=='usado'&&p.cliente===c&&p.importe>0);let uso=null;
+  box.innerHTML=`<h3>Registrar pago de este cliente</h3>${favs.length?`<div class="card" style="background:var(--bg)"><b>Saldo a favor</b>${favs.map(p=>`<div class="row" style="margin:6px 0 0"><span>${E(p.empresa)} · <b>${money(p.importe,p.moneda)}</b> <small class="mut">(${E(fd(p.fecha))}${p.nota?' · '+E(p.nota):''})</small></span><button class="pill sm" data-u="${E(p.id)}">Aplicar a facturas</button><button class="pill sm bad" data-x="${E(p.id)}">Borrar</button></div>`).join('')}</div>`:''}<div class="row"><select id="qe">${emps.map(e=>`<option>${E(e)}</option>`).join('')}</select><select id="qm"></select><input id="qi" type="number" step="0.01" placeholder="Importe del pago"><input id="qf2" type="date" value="${hoy}"><input class="grow" id="qn" placeholder="Nota (opcional)"></div><div id="qv"></div><div class="err" id="qr"></div>`;
+  let plan=null;const cents=x=>Math.round(x*100);
+  const pintar=()=>{const e=$('#qe').value;const ms=e==='Agro Bayer'?[...new Set([...F.map(f=>f.moneda),...R.filter(r=>r.empresa==='Agro Bayer').map(r=>r.moneda)])]:['USD'];const mm=$('#qm');const prev=mm.value;mm.innerHTML=ms.map(m=>`<option>${m}</option>`).join('');if(ms.includes(prev))mm.value=prev;calc()};
   const calc=()=>{const e=$('#qe').value,m=$('#qm').value,imp=parseFloat($('#qi').value),v=$('#qv');plan=null;$('#qr').textContent='';
     if(!(imp>0)){v.innerHTML='<div class="mut">Ingresá el importe para ver cómo se aplica.</div>';return}
-    if(e!=='Agro Bayer'){v.innerHTML=`<div class="mut">Se registra como pago de cuenta de ${E(e)} y se descuenta del saldo vencido (US$ ${imp.toLocaleString('es-AR')}).</div><button class="pill pri" id="qg">Registrar pago</button>`;plan={cuenta:true,e,imp};$('#qg').onclick=ejecutar;return}
+    const fu=uso&&uso.empresa===e&&uso.moneda===m?{id:uso.id,monto:Math.min(uso.importe,imp)}:null;
+    if(e!=='Agro Bayer'){const pend=cents(R.filter(r=>r.empresa===e&&r.periodo==='Saldo Vencido').reduce((a,r)=>a+r.importe,0));const aplica=Math.max(0,Math.min(cents(imp),pend)),sobra=cents(imp)-aplica;
+      v.innerHTML=`<div class="mut">${aplica?`Se descuenta del saldo vencido de ${E(e)}: ${money(aplica/100,'USD')}.`:`${E(e)} no tiene saldo vencido pendiente.`}</div>${sobra?`<div class="err">El pago supera lo pendiente. Los ${money(sobra/100,'USD')} sobrantes se guardan como <b>saldo a favor</b> del cliente.</div>`:''}<button class="pill pri" id="qg">Registrar pago</button>`;plan={cuenta:true,e,aplica:aplica/100,sobra:sobra/100,fu};$('#qg').onclick=ejecutar;return}
     let rest=cents(imp);const L=F.filter(f=>f.moneda===m).sort((a,b)=>a.vto<b.vto?-1:1).map(f=>{const t=cents(f.importe);let ap=0,tipo='';if(rest>0){if(rest>=t){ap=t;tipo='Paga completa'}else{ap=rest;tipo='Pago parcial'}rest-=ap}return {f,ap:ap/100,tipo}});
     const usadas=L.filter(x=>x.ap>0);
-    v.innerHTML=`<div class="scroll"><table><tr><th>Factura</th><th>Vto</th><th class="n">Saldo</th><th class="n">Se aplica</th><th>Resultado</th></tr>${L.map(x=>`<tr style="${x.ap?'':'opacity:.5'}"><td>${E(x.f.prefijo)}-${E(x.f.fc)}</td><td>${E(fd(x.f.vto))}</td><td class="n">${money(x.f.importe,m)}</td><td class="n">${x.ap?money(x.ap,m):'—'}</td><td>${E(x.tipo||'Sin cambios')}</td></tr>`).join('')||'<tr><td class="mut">No hay facturas pendientes en '+m+'.</td></tr>'}</table></div>${rest>0?`<div class="err">Sobran ${money(rest/100,m)} que no alcanzan a aplicarse: el pago es mayor al total pendiente.</div>`:''}<div class="mut">Se aplica a las facturas más viejas primero. Las completas se tildan como pagas en Datos; si queda un resto, se registra como pago parcial y baja el saldo de esa factura en la app (Datos no se modifica).</div>${usadas.length&&rest===0?'<button class="pill pri" id="qg">Aplicar pago</button>':''}`;
-    if(usadas.length&&rest===0){plan={L:usadas,m};$('#qg').onclick=ejecutar}};
-  const ejecutar=async()=>{if(!plan)return;const fecha=$('#qf2').value,nota=$('#qn').value;const b=$('#qg');
-    if(plan.cuenta){if(!confirm('¿Registrar el pago?'))return;b.disabled=true;try{await api({a:'pagoCuenta',empresa:plan.e,cliente:c,importe:plan.imp,fecha,nota});toast('Pago registrado');await recargar()}catch(er){$('#qr').textContent=er.error;b.disabled=false}return}
-    if(!confirm(`¿Aplicar el pago sobre ${plan.L.length} factura(s)?`))return;b.disabled=true;let ok=0;
-    for(const x of plan.L){const f=x.f,base={fila:f.fila,fc:f.fc,prefijo:f.prefijo,clienteRaw:f.clienteRaw,cliente:f.cliente,vendedor:f.vendedor,vto:f.vto,moneda:f.moneda,fecha};
-      try{x.tipo==='Paga completa'?await api({a:'pagarFactura',pagado:true,importe:f.importe,...base}):await api({a:'pagoParcial',monto:x.ap,nota,...base});ok++}catch(er){$('#qr').textContent=`Se aplicaron ${ok} de ${plan.L.length}. Falló en ${f.prefijo}-${f.fc}: ${er.error}`;await recargarSin();return}}
-    toast('Pago aplicado');await recargar()};
-  const recargarSin=async()=>{try{S.d=await api({a:'datos'});S.me=S.d.me}catch(e){}};
-  $('#qe').onchange=pintar;$('#qm').onchange=calc;$('#qi').oninput=calc;pintar()}
+    v.innerHTML=`<div class="scroll"><table><tr><th>Factura</th><th>Vto</th><th class="n">Saldo</th><th class="n">Se aplica</th><th>Resultado</th></tr>${L.map(x=>`<tr style="${x.ap?'':'opacity:.5'}"><td>${E(x.f.prefijo)}-${E(x.f.fc)}</td><td>${E(fd(x.f.vto))}</td><td class="n">${money(x.f.importe,m)}</td><td class="n">${x.ap?money(x.ap,m):'—'}</td><td>${E(x.tipo||'Sin cambios')}</td></tr>`).join('')||'<tr><td class="mut">No hay facturas pendientes en '+m+'.</td></tr>'}</table></div>${rest>0?`<div class="err">El pago supera lo pendiente. Los ${money(rest/100,m)} sobrantes se guardan como <b>saldo a favor</b> del cliente.</div>`:''}<div class="mut">Se aplica a las facturas más viejas primero. Las completas se tildan como pagas en Datos; si queda un resto, se registra como pago parcial y baja el saldo de esa factura en la app (Datos no se modifica).</div><button class="pill pri" id="qg">Aplicar pago</button>`;
+    plan={L:usadas,m,sobra:rest/100,fu};$('#qg').onclick=ejecutar};
+  const ejecutar=async()=>{if(!plan)return;const fecha=$('#qf2').value,nota=$('#qn').value,b=$('#qg'),e=$('#qe').value;
+    const favor=async(imp,m)=>{if(imp>0)await api({a:'saldoAFavor',empresa:e,cliente:c,moneda:m,importe:imp,fecha,nota,vendedor:(R.find(r=>r.empresa===e)||{}).vendedor||''})};
+    const msg=plan.cuenta?'¿Registrar el pago?':`¿Aplicar el pago sobre ${plan.L.length} factura(s)?`+(plan.sobra>0?` Sobran ${money(plan.sobra,plan.m)} que quedan como saldo a favor.`:'');
+    if(!confirm(msg))return;b.disabled=true;let ok=0;
+    try{
+      if(plan.cuenta){if(plan.aplica>0)await api({a:'pagoCuenta',empresa:plan.e,cliente:c,importe:plan.aplica,fecha,nota});await favor(plan.sobra,'USD')}
+      else{for(const x of plan.L){const f=x.f,base={fila:f.fila,fc:f.fc,prefijo:f.prefijo,clienteRaw:f.clienteRaw,cliente:f.cliente,vendedor:f.vendedor,vto:f.vto,moneda:f.moneda,fecha};
+        try{x.tipo==='Paga completa'?await api({a:'pagarFactura',pagado:true,importe:f.importe,...base}):await api({a:'pagoParcial',monto:x.ap,nota,...base});ok++}catch(er){$('#qr').textContent=`Se aplicaron ${ok} de ${plan.L.length}. Falló en ${f.prefijo}-${f.fc}: ${er.error}`;try{S.d=await api({a:'datos'})}catch(e2){}return}}
+        await favor(plan.sobra,plan.m)}
+      if(plan.fu)await api({a:'favorUsar',id:plan.fu.id,monto:plan.fu.monto});
+      toast(plan.sobra>0?'Pago aplicado; el sobrante quedó como saldo a favor':'Pago aplicado');await recargar()
+    }catch(er){$('#qr').textContent=er.error;b.disabled=false}};
+  box.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{const p=favs.find(x=>x.id===b.dataset.u);uso=p;$('#qe').value=p.empresa;pintar();$('#qm').value=p.moneda;$('#qi').value=p.importe;$('#qn').value='Aplicación de saldo a favor';calc()});
+  box.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Borrar el saldo a favor?'))return;try{await api({a:'borrarPago',id:b.dataset.x});await recargar()}catch(er){toast(er.error)}});
+  $('#qe').onchange=()=>{uso=null;pintar()};$('#qm').onchange=calc;$('#qi').oninput=calc;pintar()}
 function comHtml(C,conCli){return C.length?C.map(x=>`<div class="com"><small>${E(fd(x.ts))} · ${E(x.usuario)}${conCli?' · <b>'+E(x.cliente)+'</b>':''}</small><div>${E(x.texto)}</div>${(admin()||x.usuario.toLowerCase()===S.me.usuario.toLowerCase())?`<button class="pill sm bad" data-bc="${E(x.id)}">Borrar</button>`:''}</div>`).join(''):'<div class="mut">Sin comentarios.</div>'}
 function bindCom(){document.querySelectorAll('[data-bc]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Borrar el comentario?'))return;try{await api({a:'borrarComentario',id:b.dataset.bc});await recargar()}catch(e){toast(e.error)}})}
 async function recargar(){try{S.d=await api({a:'datos'});S.me=S.d.me;const t=S.tab,c=S.cli;draw();S.cli=c;if(c&&t==='clientes')clientes()}catch(e){toast(e.error)}}
