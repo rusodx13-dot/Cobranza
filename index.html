@@ -34,7 +34,7 @@ input,select,textarea{font:inherit;color:var(--ink);background:var(--card);borde
 .login{max-width:380px;margin:40px auto;padding:0 16px}.login .card{display:grid;gap:10px}
 .com{border-top:1px solid var(--line);padding:8px 0}.com small{color:var(--mut)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:999px;z-index:9}
-.emp{border-bottom:3px solid var(--amber2);margin:18px 0 10px;padding-bottom:2px}.emp h2{font-size:28px;text-transform:uppercase}.scroll{overflow-x:auto}[hidden]{display:none!important}
+.emp{border-bottom:3px solid var(--amber2);margin:18px 0 10px;padding-bottom:2px}.emp h2{font-size:28px;text-transform:uppercase}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px}.colres{min-width:0}.colres .kpis{grid-template-columns:1fr 1fr}@media(max-width:760px){.two{grid-template-columns:1fr}}.scroll{overflow-x:auto}[hidden]{display:none!important}
 </style></head><body>
 <div id="app"></div><div id="toast" class="toast" hidden></div>
 <script src="config.js"></script>
@@ -71,16 +71,14 @@ function draw(){
 function suma(rows,f){return rows.reduce((a,r)=>(f&&!f(r)?a:a+r.importe),0)}
 function porMon(rows){const o={};rows.forEach(r=>o[r.moneda]=(o[r.moneda]||0)+r.importe);return o}
 function bars(items,mon){const mx=Math.max(1,...items.map(i=>Math.abs(i[1])));return `<table>${items.map(i=>`<tr><td style="width:32%">${E(i[0])}</td><td><div class="barbg"><div class="bar" style="width:${Math.max(1,Math.abs(i[1])/mx*100)}%"></div></div></td><td class="n" style="width:28%">${money(i[1],mon)}</td></tr>`).join('')}</table>`}
+function colRes(e,m,tit){
+  const re=S.d.rows.filter(r=>r.empresa===e&&r.moneda===m),top={};
+  re.filter(r=>r.periodo==='Saldo Vencido').forEach(r=>top[r.cliente]=(top[r.cliente]||0)+r.importe);
+  const t=Object.entries(top).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  return `<div class="colres"><div class="emp"><h2>${E(tit)}</h2></div><div class="kpis"><div class="kpi"><b>${money(suma(re),m)}</b><span>Saldo total</span></div><div class="kpi"><b class="bad">${money(suma(re,r=>r.periodo==='Saldo Vencido'),m)}</b><span>Vencido</span></div><div class="kpi"><b>${new Set(re.map(r=>r.cliente)).size}</b><span>Clientes con saldo</span></div></div>
+  <div class="card"><h3>Top 10 saldos vencidos</h3>${t.length?`<table>${t.map((x,i)=>`<tr><td style="width:36px"><b>${i+1}</b></td><td>${E(x[0])}</td><td class="n bad">${money(x[1],m)}</td></tr>`).join('')}</table>`:'<div class="mut">Sin saldos vencidos.</div>'}</div></div>`}
 function resumen(){
-  const R=S.d.rows,emps=[...new Set(R.map(r=>r.empresa))].sort();let h='';
-  emps.forEach(e=>{const re=R.filter(r=>r.empresa===e),mons=['USD','ARS'].filter(m=>re.some(r=>r.moneda===m)),cl=new Set(re.map(r=>r.cliente));
-    h+=`<div class="emp"><h2>${E(e)}</h2></div><div class="kpis">`;
-    mons.forEach(m=>{const rm=re.filter(r=>r.moneda===m);h+=`<div class="kpi"><b>${money(suma(rm),m)}</b><span>Saldo total ${m}</span></div><div class="kpi"><b class="bad">${money(suma(rm,r=>r.periodo==='Saldo Vencido'),m)}</b><span>Vencido ${m}</span></div>`});
-    h+=`<div class="kpi"><b>${cl.size}</b><span>Clientes con saldo</span></div></div>`;
-    mons.forEach(m=>{const top={};re.filter(r=>r.moneda===m&&r.periodo==='Saldo Vencido').forEach(r=>top[r.cliente]=(top[r.cliente]||0)+r.importe);
-      const t=Object.entries(top).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
-      h+=`<div class="card"><h3>Top 10 saldos vencidos · ${E(e)} · ${m}</h3>${t.length?`<table>${t.map((x,i)=>`<tr><td style="width:40px"><b>${i+1}</b></td><td>${E(x[0])}</td><td class="n bad">${money(x[1],m)}</td></tr>`).join('')}</table>`:'<div class="mut">Sin saldos vencidos.</div>'}</div>`})});
-  $('#v').innerHTML=h||'<div class="card mut">No hay saldos para mostrar.</div>'}
+  $('#v').innerHTML=`<div class="two">${colRes('Agro Bayer','USD','Agro Bayer · Dólares')}${colRes('Agro Bayer','ARS','Agro Bayer · Pesos')}</div><div class="two">${colRes('El Paye','USD','El Paye')}${colRes('Agrosoluciones','USD','Agrosoluciones')}</div>`}
 function clientesAgg(){const m={};S.d.rows.forEach(r=>{const c=m[r.cliente]||(m[r.cliente]={cliente:r.cliente,vendedor:r.vendedor,mon:{},venc:{}});c.mon[r.moneda]=(c.mon[r.moneda]||0)+r.importe;if(r.periodo==='Saldo Vencido')c.venc[r.moneda]=(c.venc[r.moneda]||0)+r.importe});return Object.values(m).sort((a,b)=>(b.mon.USD||0)-(a.mon.USD||0)||(b.mon.ARS||0)-(a.mon.ARS||0))}
 function fmtM(o){return Object.keys(o).map(m=>money(o[m],m)).join(' · ')||'—'}
 function clientes(){
