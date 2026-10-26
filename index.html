@@ -65,7 +65,7 @@ async function cargar(){
   $('#app').innerHTML='<div class="login"><div class="card mut">Cargando datos de la planilla…</div></div>';
   try{S.d=await api({a:'datos'});S.me=S.d.me;draw()}catch(e){if(e.code!=='sesion')$('#app').innerHTML=`<div class="login"><div class="card"><div class="err">${E(e.error)}</div><button class="pill" onclick="cargar()">Reintentar</button> <button class="pill" onclick="salir()">Salir</button></div></div>`}}
 const admin=()=>S.me&&S.me.rol==='admin';
-const TABS=[['resumen','Resumen'],['clientes','Clientes'],['vendedores','Vendedores',1],['comentarios','Comentarios'],['pagos','Pagos',1],['cheques','Cheques en cartera',1],['facturas','Facturas manuales',1],['carga','Carga masiva',1],['usuarios','Usuarios',1],['historial','Historial',1]];
+const TABS=[['resumen','Resumen'],['clientes','Clientes'],['vendedores','Vendedores'],['comentarios','Comentarios'],['pagos','Pagos',1],['cheques','Cheques en cartera',1],['facturas','Facturas manuales',1],['carga','Carga masiva',1],['usuarios','Usuarios',1],['historial','Historial',1]];
 function draw(){
   const d=S.d;
   $('#app').innerHTML=`<div class="hero"><img src="icono-192.png" alt=""><div><h1>SALDOS A COBRAR</h1><small>Actualizado ${E(fd(d.ahora))}</small></div><div class="who">${E(S.me.usuario)} · ${E(S.me.rol)}<br>${admin()?'<button class="pill sm" style="color:#fff;border-color:#fff" onclick="cambiarClave()">Clave</button> ':''}<button class="pill sm" style="color:#fff;border-color:#fff" onclick="salir()">Salir</button></div></div>
@@ -164,8 +164,8 @@ function comHtml(C,conCli){return C.length?C.map(x=>`<div class="com"><small>${E
 function bindCom(){document.querySelectorAll('[data-bc]').forEach(b=>b.onclick=async()=>{if(!confirm('¿Borrar el comentario?'))return;try{await api({a:'borrarComentario',id:b.dataset.bc});await recargar()}catch(e){toast(e.error)}})}
 async function recargar(){try{S.d=await api({a:'datos'});S.me=S.d.me;const t=S.tab,c=S.cli;draw();S.cli=c;if(c&&t==='clientes')clientes()}catch(e){toast(e.error)}}
 function comentarios(){const C=S.d.comentarios.slice().sort((a,b)=>a.ts<b.ts?1:-1);$('#v').innerHTML=`<div class="card"><h3>Todos los comentarios</h3>${comHtml(C,1)}</div>`;bindCom()}
-function vendedores(){const m={};S.d.rows.forEach(r=>{const v=m[r.vendedor]||(m[r.vendedor]={n:new Set(),mon:{},venc:{}});v.n.add(r.cliente);v.mon[r.moneda]=(v.mon[r.moneda]||0)+r.importe;if(r.periodo==='Saldo Vencido')v.venc[r.moneda]=(v.venc[r.moneda]||0)+r.importe});
-  $('#v').innerHTML=`<div class="card scroll"><table><tr><th>Vendedor</th><th class="n">Clientes</th><th class="n">Saldo</th><th class="n">Vencido</th></tr>${Object.entries(m).sort((a,b)=>(b[1].mon.USD||0)-(a[1].mon.USD||0)).map(([k,v])=>`<tr><td>${E(k)}</td><td class="n">${v.n.size}</td><td class="n">${fmtM(v.mon)}</td><td class="n bad">${fmtM(v.venc)}</td></tr>`).join('')}</table></div>`}
+function vendedores(){const L=(S.d.vendedoresResumen||[]).slice().sort((a,b)=>(b.saldo.USD||0)-(a.saldo.USD||0)||(b.saldo.ARS||0)-(a.saldo.ARS||0));
+  $('#v').innerHTML=`<div class="card scroll"><table><tr><th>Vendedor</th><th class="n">Clientes</th><th class="n">Saldo</th><th class="n">Vencido</th></tr>${L.map(v=>`<tr><td>${E(v.vendedor)}</td><td class="n">${v.clientes}</td><td class="n">${fmtM(v.saldo)}</td><td class="n bad">${fmtM(v.vencido)}</td></tr>`).join('')}</table></div>`}
 function pagos(){
   const P=S.d.pagos,F=S.d.facturas;
   $('#v').innerHTML=`<div class="card scroll"><h3>Facturas Agro Bayer pendientes — tildá una o varias para marcarlas como pagas</h3><div class="row"><input class="grow" id="qf" placeholder="Filtrar por cliente o número…"><span class="mut" id="sm"></span><button class="pill pri" id="mp" disabled>Marcar seleccionadas como pagas</button></div><table id="tf"></table></div>
