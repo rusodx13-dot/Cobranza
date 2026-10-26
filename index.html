@@ -66,9 +66,9 @@ async function cargar(){
   try{S.d=await api({a:'datos'});S.me=S.d.me;draw()}catch(e){if(e.code!=='sesion')$('#app').innerHTML=`<div class="login"><div class="card"><div class="err">${E(e.error)}</div><button class="pill" onclick="cargar()">Reintentar</button> <button class="pill" onclick="salir()">Salir</button></div></div>`}}
 const admin=()=>S.me&&S.me.rol==='admin';
 const TABS=[['resumen','Resumen'],['clientes','Clientes'],['vendedores','Vendedores'],['comentarios','Comentarios'],['pagos','Pagos',1],['cheques','Cheques en cartera',1],['facturas','Facturas manuales',1],['carga','Carga masiva',1],['usuarios','Usuarios',1],['historial','Historial',1]];
-function tcBar(){const t=S.d.tc;const txt=t?`TC del día: <b>$ ${t.valor.toLocaleString('es-AR')}</b> <small class="mut">(${E(fd(t.fecha))})</small>`:'<span class="mut">TC del día sin cargar</span>';
-  return `<div class="row" style="margin:-6px 0 12px;gap:8px">${txt}${true?`<input id="tcv" type="number" step="0.01" placeholder="Nuevo TC" style="width:110px"><button class="pill sm" id="tcg">Guardar TC</button>`:''}</div>`}
-function tcBind(){const b=$('#tcg');if(b)b.onclick=async()=>{const v=$('#tcv').value;try{await api({a:'tcGuardar',valor:v});toast('TC guardado');await recargar()}catch(e){toast(e.error)}}}
+function tcBar(){const t=S.d.tc;const txt=t?`TC del día: <b>$ ${t.valor.toLocaleString('es-AR')}</b> <small class="mut">(${E(fd(t.fecha))}${t.origen?' · '+E(t.origen):t.usuario?' · cargado por '+E(t.usuario):''})</small>`:'<span class="mut">TC del día sin cargar</span>';
+  return `<div class="row" style="margin:-6px 0 12px;gap:8px">${txt}${true?`<input id="tcv" type="number" step="0.01" placeholder="Nuevo TC" style="width:110px"><button class="pill sm" id="tcg">Guardar TC</button><button class="pill sm" id="tcb">Traer TC del BNA</button>`:''}</div>`}
+function tcBind(){const bb=$('#tcb');if(bb)bb.onclick=async()=>{bb.disabled=true;try{const j=await api({a:'tcBna'});toast('TC del BNA: $ '+j.tc.valor.toLocaleString('es-AR'));await recargar()}catch(e){toast(e.error);bb.disabled=false}};const b=$('#tcg');if(b)b.onclick=async()=>{const v=$('#tcv').value;try{await api({a:'tcGuardar',valor:v});toast('TC guardado');await recargar()}catch(e){toast(e.error)}}}
 function aPesos(x,m){const t=S.d.tc;return m==='USD'&&t?x*t.valor:null}
 function draw(){
   const d=S.d;
