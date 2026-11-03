@@ -160,14 +160,21 @@ function panelPago(c,R,F){
   const calc=()=>{const e=$('#qe').value,m=$('#qm').value,imp=parseFloat($('#qi').value),v=$('#qv');plan=null;$('#qcl').hidden=!(e==='Agro Bayer'&&['Cheque','eCheq'].includes($('#qd').value));
     const hasA=F.some(f=>f.moneda==='ARS'),hasU=F.some(f=>f.moneda==='USD');let mf=m;if(e==='Agro Bayer'&&m==='ARS'&&hasU&&(!hasA||$('#qfm').value==='USD'))mf='USD';
     $('#qfl').hidden=!(e==='Agro Bayer'&&m==='ARS'&&hasA&&hasU);const conv=e==='Agro Bayer'&&m==='ARS'&&mf==='USD';$('#qr').textContent='';$('#qt').hidden=!(e!=='Agro Bayer'&&m==='ARS');
-    if(!(imp>0)&&e!=='Agro Bayer'){v.innerHTML='<div class="mut">Ingresá el importe para ver cómo se aplica.</div>';return}
+    
     const fu=uso&&uso.empresa===e&&(e!=='Agro Bayer'||uso.moneda===m)?{id:uso.id,monto:Math.min(uso.importe,imp)}:null;
     const tcv=$('#qt');$('#qt').hidden=!(e!=='Agro Bayer'&&m==='ARS')&&!conv;
-    if(e!=='Agro Bayer'){const tc=parseFloat(tcv.value),pesos=m==='ARS';
-      if(pesos&&!(tc>0)){v.innerHTML=htmlCta(c,e,0).h+'<div class="mut">Ingresá el tipo de cambio para convertir el pago a US$.</div>';return}
-      const usd=pesos?Math.round(imp/tc*100)/100:imp,{h,pl}=htmlCta(c,e,usd);
-      v.innerHTML=`${pesos?`<div class="mut">$ ${pf(imp)} a TC ${tcf(tc)} = <b>${money(usd,'USD')}</b></div>`:''}${h}<button class="pill pri" id="qg">Registrar pago</button>`;
-      plan={cuenta:true,pl,pesos,tc,fu};$('#qg').onclick=ejecutar;const o=$('#qo');if(o)o.onchange=()=>{CTA_OTRA=o.checked;calc()};return}
+    if(e!=='Agro Bayer'){const tc=parseFloat(tcv.value),pesos=m==='ARS',r2=x=>Math.round(x*100)/100,impN=isNaN(imp)?0:imp,tcOk=tc>0;
+      const ord=r=>r.periodo==='Saldo Vencido'?'0':r.periodo;
+      const Rw=S.d.rows.filter(r=>r.cliente===c&&r.empresa===e&&r.periodo!=='Saldo a favor'&&r.moneda==='USD'&&r.importe!==0).slice().sort((x,y)=>ord(x)<ord(y)?-1:1).map((r,i)=>({k:'r'+i,lab:r.periodo==='Saldo Vencido'?'Saldo vencido':'A vencer '+fp(r.periodo),imp:r.importe})),
+        Vf=(uso?[]:favs.filter(p=>p.empresa===e&&p.moneda==='USD')).map(p=>({k:'v'+p.id,lab:'Saldo a favor'+(p.nota?' · '+p.nota:''),imp:-p.importe,p}));
+      const S3=selM||new Set(),it=Rw.concat(Vf),son=it.filter(x=>S3.has(x.k)),usdSel=r2(son.filter(x=>x.imp>0).reduce((a,x)=>a+x.imp,0)),credSel=r2(-son.filter(x=>x.imp<0).reduce((a,x)=>a+x.imp,0)),pagUsd=r2(usdSel-credSel),Vsel=son.filter(x=>x.p).map(x=>x.p);
+      const tabla=`<div class="mut">Tildá los importes vencidos y a vencer (y los saldos a favor) que cancela este pago.</div><div class="scroll"><table><tr><th></th><th>Concepto</th><th class="n">Importe</th>${tcOk?'<th class="n">En pesos</th>':''}</tr>${it.map(x=>`<tr style="${S3.has(x.k)?'':'opacity:.55'}"><td><input type="checkbox" data-sf="${E(x.k)}" ${S3.has(x.k)?'checked':''}></td><td>${E(x.lab)}</td><td class="n">${money(x.imp,'USD')}</td>${tcOk?`<td class="n">${money(r2(x.imp*tc),'ARS')}</td>`:''}</tr>`).join('')||'<tr><td class="mut" colspan="4">Sin importes pendientes en '+E(e)+'.</td></tr>'}</table></div>${son.length?`<div class="card" style="background:var(--bg);margin-top:8px"><table><tr><td>Importes tildados</td><td class="n">${money(usdSel,'USD')}${tcOk?' = '+money(r2(usdSel*tc),'ARS'):''}</td></tr>${credSel?`<tr><td>− Saldo a favor</td><td class="n">- ${money(credSel,'USD')}${tcOk?' = - '+money(r2(credSel*tc),'ARS'):''}</td></tr>`:''}<tr><td><b>${pagUsd<0?'Saldo a favor del cliente':'Importe a pagar'}</b></td><td class="n"><b>${money(Math.abs(pagUsd),'USD')}${tcOk?' = '+money(Math.abs(r2(pagUsd*tc)),'ARS'):''}</b></td></tr></table><div class="row" style="margin-top:6px"><button class="pill sm" id="qpg" type="button">Usar como importe del pago</button></div>${tcOk?'':'<div class="mut">Ingresá el TC para ver los importes en pesos.</div>'}</div>`:''}`;
+      const ligar=()=>{v.querySelectorAll('[data-sf]').forEach(k=>k.onchange=()=>{selM=new Set(S3);k.checked?selM.add(k.dataset.sf):selM.delete(k.dataset.sf);calc()});const bp=$('#qpg');if(bp)bp.onclick=()=>{selM=new Set(S3);const val=pesos?(tcOk?r2(Math.max(0,pagUsd)*tc):''):Math.max(0,pagUsd);if(val===''){toast('Ingresá el TC');return}$('#qi').value=val;calc()}};
+      if(pesos&&!(tc>0)){v.innerHTML=tabla+htmlCta(c,e,0).h+'<div class="mut">Ingresá el tipo de cambio para convertir el pago a US$.</div>';ligar();return}
+      if(!(impN>0)&&!credSel){v.innerHTML=tabla+htmlCta(c,e,0).h+'<div class="mut">Ingresá el importe del pago para ver cómo se aplica.</div>';ligar();return}
+      const usdCash=pesos?r2(impN/tc):impN,usd=r2(usdCash+credSel),{h,pl}=htmlCta(c,e,usd);
+      v.innerHTML=`${tabla}${pesos?`<div class="mut">$ ${pf(impN)} a TC ${tcf(tc)} = <b>${money(usdCash,'USD')}</b>${credSel?` + saldo a favor ${money(credSel,'USD')} = <b>${money(usd,'USD')}</b>`:''}</div>`:credSel?`<div class="mut">${money(usdCash,'USD')} + saldo a favor ${money(credSel,'USD')} = <b>${money(usd,'USD')}</b></div>`:''}${h}<div class="mut">Lo que se paga de períodos a vencer baja el total del cliente; se descuenta primero del saldo vencido y el resto queda como saldo a favor.</div><button class="pill pri" id="qg">Registrar pago</button>`;
+      plan={cuenta:true,pl,pesos,tc,fu,V:Vsel};$('#qg').onclick=ejecutar;ligar();const o=$('#qo');if(o)o.onchange=()=>{CTA_OTRA=o.checked;calc()};return}
     const dif=['Cheque','eCheq'].includes($('#qd').value),tcC=parseFloat(tcv.value);
     if(conv&&!(tcC>0)){v.innerHTML='<div class="mut">Las facturas están en US$ y el pago es en pesos: ingresá el TC de cobro para convertir.</div>';return}
     const r2=x=>Math.round(x*100)/100;
@@ -204,7 +211,7 @@ function panelPago(c,R,F){
     const msg=plan.cuenta?'¿Registrar el pago?':`¿Aplicar el pago sobre ${plan.L.length} factura(s)?`+(plan.sobra>0?` Sobran ${money(plan.sobra,plan.m)} que quedan como saldo a favor.`:'');
     if(!confirm(msg))return;b.disabled=true;let ok=0;
     try{
-      if(plan.cuenta){await ejecutarCta(c,plan.pl,plan.pesos,plan.tc,fecha,nota,(R.find(r=>r.empresa===e)||{}).vendedor,mr)}
+      if(plan.cuenta){await ejecutarCta(c,plan.pl,plan.pesos,plan.tc,fecha,nota+((plan.V||[]).length?' (incluye saldo a favor)':''),(R.find(r=>r.empresa===e)||{}).vendedor,mr);for(const p of plan.V||[])await api({a:'favorUsar',id:p.id,monto:p.importe})}
       else{for(const x of plan.L){const f=x.f,base={fila:f.fila,fc:f.fc,prefijo:f.prefijo,clienteRaw:f.clienteRaw,cliente:f.cliente,vendedor:f.vendedor,vto:f.vto,moneda:f.moneda,fecha,...mr,...(plan.conv?{monedaPago:'ARS',tc:plan.tc,iva:plan.iva}:{})};
         try{(x.tipo==='Paga completa'||x.f.importe<0)?await api({a:'pagarFactura',pagado:true,importe:f.importe,...base}):await api({a:'pagoParcial',monto:x.ap,nota,...base});ok++}catch(er){$('#qr').textContent=`Se aplicaron ${ok} de ${plan.L.length}. Falló en ${f.prefijo}-${f.fc}: ${er.error}`;try{S.d=await api({a:'datos'})}catch(e2){}return}}
         await favor(plan.sobra,plan.m);for(const p of plan.V||[])await api({a:'favorUsar',id:p.id,monto:p.importe})}
