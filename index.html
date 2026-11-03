@@ -265,12 +265,13 @@ function simulador(){
       if(on){usd+=imp;if(!(f.tcFact>0))sinTc++;else if(df>0)nd+=df;else if(df<0)nc-=df}
       return `<tr style="${on?'':'opacity:.55'}"><td><input type="checkbox" data-sf="${f.fila}" ${on?'checked':''}></td><td>${E(f.prefijo)}-${E(f.fc)}</td><td>${E(fd(f.vto))}</td><td class="n">${money(f.importe,'USD')}</td><td class="n">${on?`<input type="number" step="0.01" min="0" data-si="${f.fila}" value="${imp}" style="width:100px">`:'—'}</td><td class="n">${f.tcFact>0?tcf(f.tcFact):'<span class="bad">sin TC</span>'}</td><td class="n">${on?(df==null?'<span class="mut">no calculable</span>':df>0?`<b>ND ${money(df,'ARS')}</b>`:df<0?`<b>NC ${money(-df,'ARS')}</b>`:'sin diferencia'):''}</td></tr>`}).join('');
     const bloque=(t,n,cls)=>{const x=ivaT(n,21);return `<div class="${cls}">${t}: neto ${money(n,'ARS')} + IVA 21% ${money(x.iva,'ARS')} = <b>${money(x.tot,'ARS')}</b></div>`};
-    const neto=r2(nd-nc),xn=ivaT(Math.abs(neto),21);
+    const neto=r2(nd-nc),xn=ivaT(Math.abs(neto),21),pes=r2(usd*tc),ndT=ivaT(r2(nd),21).tot,ncT=ivaT(r2(nc),21).tot,pagar=r2(pes+ndT-ncT);
     box.innerHTML=`<div class="scroll"><table><tr><th></th><th>Factura</th><th>Vto</th><th class="n">Importe</th><th class="n">US$ a aplicar</th><th class="n">TC fact.</th><th class="n">Dif. de cambio (neto)</th></tr>${rows}</table></div>
     <div class="row"><button class="pill sm" id="sa" type="button">Tildar todas</button><button class="pill sm" id="sn" type="button">Destildar todas</button></div>
-    ${usd>0?`<div class="mut">Se aplican ${money(usd,'USD')} a TC ${tcf(tc)} = ${money(r2(usd*tc),'ARS')} (en pesos).</div>
+    ${usd>0?`
     ${nd>0?bloque('Nota de débito',r2(nd),'err'):''}${nc>0?bloque('Nota de crédito',r2(nc),'mut'):''}
     ${nd>0&&nc>0?`<div class="mut">Compensando ND y NC: ${neto>=0?'ND':'NC'} neto ${money(Math.abs(neto),'ARS')} + IVA 21% ${money(xn.iva,'ARS')} = <b>${money(xn.tot,'ARS')}</b></div>`:''}
+    <div class="card" style="background:var(--bg);margin-top:8px"><table><tr><td>Facturas (${money(usd,'USD')} a TC ${tcf(tc)})</td><td class="n">${money(pes,'ARS')}</td></tr>${nd>0?`<tr><td>+ Nota de débito (con IVA)</td><td class="n">${money(ndT,'ARS')}</td></tr>`:''}${nc>0?`<tr><td>− Nota de crédito (con IVA)</td><td class="n">- ${money(ncT,'ARS')}</td></tr>`:''}<tr><td><b>Importe a pagar</b></td><td class="n"><b>${money(pagar,'ARS')}</b></td></tr></table></div>
     ${!nd&&!nc?'<div class="mut">Sin diferencia de cambio para las facturas elegidas.</div>':''}
     ${sinTc?`<div class="bad">${sinTc} factura${sinTc>1?'s':''} sin TC de factura: no entra${sinTc>1?'n':''} en el cálculo.</div>`:''}`:'<div class="mut">Tildá las facturas a simular.</div>'}`;
     box.querySelectorAll('[data-sf]').forEach(k=>k.onchange=()=>{const f=L.find(x=>String(x.fila)===k.dataset.sf);if(k.checked)ap[f.fila]={v:f.importe};else delete ap[f.fila];calc()});
