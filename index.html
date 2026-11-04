@@ -278,7 +278,7 @@ function pagos(){
   let abierto=null;const abrirPanel=()=>{const c=$('#pc').value.trim(),box=$('#pp');if(c===abierto)return;abierto=c;if(!S.d.rows.some(r=>r.cliente===c)){box.innerHTML=c?'<div class="mut" style="margin-top:8px">Elegí un cliente de la lista.</div>':'';return}panelPago(c,S.d.rows.filter(r=>r.cliente===c),S.d.facturas.filter(f=>f.cliente===c))};
   $('#pc').onchange=abrirPanel;$('#pc').oninput=()=>{const c=$('#pc').value.trim();if(S.d.rows.some(r=>r.cliente===c)||abierto)abrirPanel()};
   registro();ndncCard();
-  $('#ap').onclick=async()=>{if(!confirm('¿Ya cargaste estos pagos en la planilla? Dejarán de descontarse del saldo.'))return;try{await api({a:'aplicarPagos'});await recargar()}catch(e){toast(e.error)}};}
+  $('#ap').onclick=async()=>{if(!confirm('¿Ya cargaste estos pagos en la planilla? Dejarán de descontarse del saldo y los saldos a favor de Agrosoluciones y El Paye se retiran de la app.'))return;try{await api({a:'aplicarPagos'});await recargar()}catch(e){toast(e.error)}};}
 
 function ndncCard(){
   const N=(S.d.ndnc||[]),pen=N.filter(x=>x.estado==='pendiente').length,box=$('#ndc');if(!box)return;
@@ -378,7 +378,7 @@ function carga(){
     if(!rows.length)throw {error:'No hay cuentas con datos.'};
     const emp=$('#se').value,act=S.d.rows.filter(r=>r.empresa===emp).reduce((a,r)=>a+r.importe,0);
     CG.s={rows,header:H};
-    box.innerHTML=`<p><b>${rows.length}</b> cuentas · columnas: ${E(H.join(', '))}</p><p>Saldo total actual de <b>${E(emp)}</b>: ${money(act,'USD')} → con el Excel nuevo: <b>${money(tot,'USD')}</b>${bad?` · <span class="bad">${bad} celdas no numéricas se cargarán como 0</span>`:''}</p><label><input type="checkbox" id="sp" checked> Pasar a "aplicados" los pagos pendientes de ${E(emp)} (el Excel nuevo ya los incluye)</label><div class="row" style="margin-top:8px"><button class="pill pri" id="cs">Reemplazar saldos de ${E(emp)}</button></div><div class="err" id="es"></div>`;
+    box.innerHTML=`<p><b>${rows.length}</b> cuentas · columnas: ${E(H.join(', '))}</p><p>Saldo total actual de <b>${E(emp)}</b>: ${money(act,'USD')} → con el Excel nuevo: <b>${money(tot,'USD')}</b>${bad?` · <span class="bad">${bad} celdas no numéricas se cargarán como 0</span>`:''}</p><label><input type="checkbox" id="sp" checked> Pasar a "aplicados" los pagos pendientes y los saldos a favor de ${E(emp)} (el Excel nuevo ya los incluye)</label><div class="row" style="margin-top:8px"><button class="pill pri" id="cs">Reemplazar saldos de ${E(emp)}</button></div><div class="err" id="es"></div>`;
     $('#cs').onclick=async()=>{if(!confirm(`Se reemplaza TODO el contenido de la solapa ${emp} por ${rows.length} cuentas. Se hace antes una copia de la planilla en Drive. ¿Seguir?`))return;$('#cs').disabled=true;toast('Actualizando… puede demorar unos segundos');try{const j=await api({a:'actualizarSaldos',empresa:emp,header:H,rows,aplicarPagos:$('#sp').checked});toast(`Saldos de ${emp} actualizados: ${j.filas} cuentas`);await recargar();S.tab='carga';draw()}catch(er){$('#es').textContent=er.error;$('#cs').disabled=false}};
   }catch(er){box.innerHTML=`<div class="err">${E(er.error||er.message)}</div>`}};
   $('#se').onchange=()=>{$('#sx').value='';$('#ps').innerHTML=''}}
