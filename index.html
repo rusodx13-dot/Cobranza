@@ -101,7 +101,12 @@ function netear(d){if(!d||!d.rows)return d;d.rows0=d.rows;const g={},out=[],c2=x
   Object.values(g).forEach(L=>{let f=c2(-L.filter(r=>r.importe<0).reduce((a,r)=>a+r.importe,0));const P=L.filter(r=>r.importe>0),o=r=>r.periodo==='Saldo Vencido'?'0':/^\d{4}-\d{2}$/.test(r.periodo)?r.periodo:'9'+r.periodo;
     P.sort((x,y)=>o(x)<o(y)?-1:o(x)>o(y)?1:0).forEach(r=>{if(f>0){const t=Math.min(f,r.importe);r.importe=c2(r.importe-t);f=c2(f-t)}if(r.importe>0.004)out.push(r)});
     if(f>0.004){const b=L.find(r=>r.importe<0)||L[0];out.push({...b,periodo:'Saldo a favor',importe:-f})}});
-  d.rows=out;return d}
+  d.rows=out;
+  // vendedores: la app trabaja con sus clientes; en Clientes pueden ver los de otro vendedor si lo eligen
+  const mv=misVend(d);if(mv){d.all={rows:d.rows,rows0:d.rows0,facturas:d.facturas};const m=x=>mv.includes(x.vendedor);d.rows=d.rows.filter(m);d.rows0=d.rows0.filter(m);d.facturas=(d.facturas||[]).filter(m)}
+  return d}
+function misVend(d){d=d||S.d;return d&&d.me&&d.me.rol!=='admin'?String(d.me.vendedor||'').split(',').map(x=>x.trim()).filter(Boolean):null}
+function conTodos(fn){const d=S.d;if(!d.all)return fn();const b={rows:d.rows,rows0:d.rows0,facturas:d.facturas};Object.assign(d,d.all);try{return fn()}finally{Object.assign(d,b)}}
 function clientesAgg(){
   const hoy=S.d.ahora.slice(0,10),h0=D0(hoy),ym=S.d.hoyYm,m={};
   const g=(c,e,mo,v)=>m[c+'|'+e+'|'+mo]||(m[c+'|'+e+'|'+mo]={cliente:c,empresa:e,moneda:mo,vendedor:v,venc:0,dias:null,a30:0,a60:0});
@@ -120,19 +125,21 @@ function clientesAgg(){
 function fmtM(o){return Object.keys(o).map(m=>money(o[m],m)).join(' · ')||'—'}
 function clientes(){
   if(S.cli)return detalle();
-  $('#v').innerHTML=`<div class="row"><input class="grow" id="q" placeholder="Buscar cliente, vendedor o empresa…" value="${E(S.q)}"></div><div class="card scroll"><table id="t"></table></div><div class="mut" style="font-size:13px">Tocá el título de una columna para ordenar (otra vez para invertir). En las columnas de importes se ordena dentro de cada moneda. Agro Bayer: días y vencimientos exactos por factura (a 30 días = vence en los próximos 30; a 60 = entre 31 y 60). Agrosoluciones y El Paye vienen por mes: "a 30 días" suma el mes en curso y el siguiente, "a 60 días" el mes subsiguiente, y los días vencidos no están disponibles.</div>`;
+  const mv=misVend();if(S.fv==null)S.fv=mv?'mios':'';if(S.fe==null)S.fe='';
+  const vends=[...new Set(conTodos(()=>S.d.rows.map(r=>r.vendedor).concat(S.d.facturas.map(f=>f.vendedor))))].filter(Boolean).sort((a,b)=>a.localeCompare(b,'es'));
+  $('#v').innerHTML=`<div class="row"><input class="grow" id="q" placeholder="Buscar cliente, vendedor o empresa…" value="${E(S.q)}"><select id="fe2"><option value="">Todas las empresas</option>${['Agro Bayer','Agrosoluciones','El Paye'].map(e=>`<option ${S.fe===e?'selected':''}>${e}</option>`).join('')}</select><select id="fv2">${mv?`<option value="mios" ${S.fv==='mios'?'selected':''}>Mis clientes</option>`:''}<option value="" ${S.fv===''?'selected':''}>Todos los vendedores</option>${vends.map(v=>`<option value="${E(v)}" ${S.fv===v?'selected':''}>${E(v)}</option>`).join('')}</select></div><div class="card scroll"><table id="t"></table></div><div class="mut" style="font-size:13px">Tocá el título de una columna para ordenar (otra vez para invertir). En las columnas de importes se ordena dentro de cada moneda. Agro Bayer: días y vencimientos exactos por factura (a 30 días = vence en los próximos 30; a 60 = entre 31 y 60). Agrosoluciones y El Paye vienen por mes: "a 30 días" suma el mes en curso y el siguiente, "a 60 días" el mes subsiguiente, y los días vencidos no están disponibles.</div>`;
   const n=(v,m)=>v?money(v,m):'—';
   const COLS=[['cliente','Cliente'],['empresa','Empresa'],['vendedor','Vendedor'],['venc','Saldo vencido',1],['dias','Días vencido',1],['a30','A vencer 30 días',1],['a60','A vencer 60 días',1]];
   const pintar=()=>{const q=S.q.toLowerCase(),num=COLS.find(c=>c[0]===ORD.k)[2];
-    const L=clientesAgg().filter(c=>!q||(c.cliente+c.vendedor+c.empresa).toLowerCase().includes(q));
+    const L=conTodos(clientesAgg).filter(c=>(!q||(c.cliente+c.vendedor+c.empresa).toLowerCase().includes(q))&&(!S.fe||c.empresa===S.fe)&&(S.fv===''||(S.fv==='mios'?mv.includes(c.vendedor):c.vendedor===S.fv)));
     L.sort((a,b)=>{let r;if(num){r=(a.moneda<b.moneda?1:a.moneda>b.moneda?-1:0);if(r)return r;r=((a[ORD.k]||0)-(b[ORD.k]||0))*ORD.d}else r=String(a[ORD.k]).localeCompare(String(b[ORD.k]),'es',{sensitivity:'base'})*ORD.d;return r||a.cliente.localeCompare(b.cliente,'es')});
     $('#t').innerHTML='<tr>'+COLS.map(c=>`<th data-k="${c[0]}" class="${c[2]?'n':''}" style="cursor:pointer;user-select:none">${c[1]}${ORD.k===c[0]?(ORD.d>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>'+L.map(c=>`<tr style="cursor:pointer" data-c="${E(c.cliente)}"><td>${E(c.cliente)}</td><td>${E(c.empresa)}</td><td>${E(c.vendedor)}</td><td class="n ${c.venc>0?'bad':''}">${n(c.venc,c.moneda)}</td><td class="n ${c.dias?'bad':''}">${c.dias?c.dias+' d':'—'}</td><td class="n">${n(c.a30,c.moneda)}</td><td class="n">${n(c.a60,c.moneda)}</td></tr>`).join('');
     document.querySelectorAll('#t th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;ORD=ORD.k===k?{k,d:-ORD.d}:{k,d:COLS.find(c=>c[0]===k)[2]?-1:1};try{localStorage.setItem('cob_ord',JSON.stringify(ORD))}catch(e){}pintar()});
     document.querySelectorAll('#t [data-c]').forEach(tr=>tr.onclick=()=>{S.cli=tr.dataset.c;clientes()})};
-  $('#q').oninput=e=>{S.q=e.target.value;pintar()};limpiador(['q']);pintar()}
+  $('#q').oninput=e=>{S.q=e.target.value;pintar()};$('#fe2').oninput=e=>{S.fe=e.target.value;pintar()};$('#fv2').oninput=e=>{S.fv=e.target.value;pintar()};limpiador(['q','fe2']);pintar()}
 function pesosTotal(R){const t=S.d.tc;if(!t)return '';const usd=R.filter(r=>r.moneda==='USD').reduce((a,r)=>a+r.importe,0),ars=R.filter(r=>r.moneda==='ARS').reduce((a,r)=>a+r.importe,0);
   return `<div class="mut" style="margin-top:8px">${usd?`US$ ${usd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})} a TC ${tcf(t.valor)} = <b>${money(usd*t.valor,'ARS')}</b>`:''}${usd&&ars?` · más ${money(ars,'ARS')} en pesos = <b>${money(usd*t.valor+ars,'ARS')}</b> en total`:''}</div>`}
-function detalle(){
+function detalle(){if(S.d.all&&!detalle.in){detalle.in=1;try{return conTodos(detalle)}finally{detalle.in=0}}
   const c=S.cli,R=S.d.rows.filter(r=>r.cliente===c),F=S.d.facturas.filter(f=>f.cliente===c),C=S.d.comentarios.filter(x=>x.cliente===c).sort((a,b)=>a.ts<b.ts?1:-1);
   $('#v').innerHTML=`<div class="row"><button class="pill" onclick="S.cli=null;clientes()">← Clientes</button><h2>${E(c)}</h2>${admin()?'<button class="pill sm" id="be">Editar cliente</button>':''}</div>${admin()?'<div id="ec" hidden></div>':''}
   <div class="card scroll"><h3>Saldos</h3><table><tr><th>Empresa</th><th>Vendedor</th><th>Período</th><th class="n">Importe</th>${S.d.tc?'<th class="n">En pesos</th>':''}</tr>${R.map(r=>`<tr><td>${E(r.empresa)}</td><td>${E(r.vendedor)}</td><td>${r.periodo==='Saldo Vencido'&&r.importe<0?'<b>Pagos cargados</b> <small class="mut">(descontados del vencido)</small>':E(fp(r.periodo))}</td><td class="n">${money(r.importe,r.moneda)}</td>${S.d.tc?`<td class="n">${r.moneda==='USD'?money(aPesos(r.importe,'USD'),'ARS'):''}</td>`:''}</tr>`).join('')}</table>${pesosTotal(R)}</div>
