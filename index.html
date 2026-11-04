@@ -115,6 +115,7 @@ function clientesAgg(){
   (S.d.rows0||S.d.rows).filter(r=>r.periodo==='Saldo a favor'&&r.empresa==='Agro Bayer').forEach(r=>{const x=g(r.cliente,r.empresa,r.moneda,r.vendedor);x.favor=(x.favor||0)-r.importe});
   Object.values(m).forEach(x=>{let f=x.favor||0;const f0=f;['venc','a30','a60'].forEach(k=>{if(f>0&&x[k]>0){const t=Math.min(f,x[k]);x[k]=Math.round((x[k]-t)*100)/100;f=Math.round((f-t)*100)/100}});x.favor=f});
   S.d.rows.filter(r=>r.periodo==='Saldo a favor'&&r.empresa!=='Agro Bayer').forEach(r=>{const x=g(r.cliente,r.empresa,r.moneda,r.vendedor);x.favor=Math.round(((x.favor||0)-r.importe)*100)/100});
+  Object.values(m).forEach(x=>{if(x.favor>0){x.venc=Math.round((x.venc-x.favor)*100)/100;x.favor=0}});
   return Object.values(m).filter(x=>x.venc||x.a30||x.a60||x.favor).sort((a,b)=>(a.moneda<b.moneda?1:a.moneda>b.moneda?-1:0)||b.venc-a.venc)}
 function fmtM(o){return Object.keys(o).map(m=>money(o[m],m)).join(' · ')||'—'}
 function clientes(){
@@ -125,7 +126,7 @@ function clientes(){
   const pintar=()=>{const q=S.q.toLowerCase(),num=COLS.find(c=>c[0]===ORD.k)[2];
     const L=clientesAgg().filter(c=>!q||(c.cliente+c.vendedor+c.empresa).toLowerCase().includes(q));
     L.sort((a,b)=>{let r;if(num){r=(a.moneda<b.moneda?1:a.moneda>b.moneda?-1:0);if(r)return r;r=((a[ORD.k]||0)-(b[ORD.k]||0))*ORD.d}else r=String(a[ORD.k]).localeCompare(String(b[ORD.k]),'es',{sensitivity:'base'})*ORD.d;return r||a.cliente.localeCompare(b.cliente,'es')});
-    $('#t').innerHTML='<tr>'+COLS.map(c=>`<th data-k="${c[0]}" class="${c[2]?'n':''}" style="cursor:pointer;user-select:none">${c[1]}${ORD.k===c[0]?(ORD.d>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>'+L.map(c=>`<tr style="cursor:pointer" data-c="${E(c.cliente)}"><td>${E(c.cliente)}${c.favor>0?`<br><small class="mut">Saldo a favor: ${money(c.favor,c.moneda)}</small>`:''}</td><td>${E(c.empresa)}</td><td>${E(c.vendedor)}</td><td class="n ${c.venc>0?'bad':''}">${n(c.venc,c.moneda)}</td><td class="n ${c.dias?'bad':''}">${c.dias?c.dias+' d':'—'}</td><td class="n">${n(c.a30,c.moneda)}</td><td class="n">${n(c.a60,c.moneda)}</td></tr>`).join('');
+    $('#t').innerHTML='<tr>'+COLS.map(c=>`<th data-k="${c[0]}" class="${c[2]?'n':''}" style="cursor:pointer;user-select:none">${c[1]}${ORD.k===c[0]?(ORD.d>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>'+L.map(c=>`<tr style="cursor:pointer" data-c="${E(c.cliente)}"><td>${E(c.cliente)}</td><td>${E(c.empresa)}</td><td>${E(c.vendedor)}</td><td class="n ${c.venc>0?'bad':''}">${n(c.venc,c.moneda)}</td><td class="n ${c.dias?'bad':''}">${c.dias?c.dias+' d':'—'}</td><td class="n">${n(c.a30,c.moneda)}</td><td class="n">${n(c.a60,c.moneda)}</td></tr>`).join('');
     document.querySelectorAll('#t th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;ORD=ORD.k===k?{k,d:-ORD.d}:{k,d:COLS.find(c=>c[0]===k)[2]?-1:1};try{localStorage.setItem('cob_ord',JSON.stringify(ORD))}catch(e){}pintar()});
     document.querySelectorAll('#t [data-c]').forEach(tr=>tr.onclick=()=>{S.cli=tr.dataset.c;clientes()})};
   $('#q').oninput=e=>{S.q=e.target.value;pintar()};limpiador(['q']);pintar()}
