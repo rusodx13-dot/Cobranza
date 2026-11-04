@@ -142,14 +142,14 @@ function editarCliente(c,R){
   if(aj)$('#er').onclick=async()=>{if(!confirm('¿Volver al nombre y vendedor originales?'))return;try{const j=await api({a:'clienteGuardar',cliente:c,restablecer:true});S.cli=j.cliente;toast('Restablecido');await recargar()}catch(e){$('#eerr').textContent=e.error}}}
 const MEDIOS=['Transferencia','Efectivo','Cheque','eCheq','Depósito','Otro'];
 let CTA_OTRA=true,GEN_ND=true;
-function pendCta(c,e){return Math.round(S.d.rows.filter(r=>r.cliente===c&&r.empresa===e&&r.periodo==='Saldo Vencido').reduce((a,r)=>a+r.importe,0)*100)}
+function pendCta(c,e){return Math.round(S.d.rows.filter(r=>r.cliente===c&&r.empresa===e&&r.moneda==='USD'&&r.periodo!=='Saldo a favor'&&r.importe>0).reduce((a,r)=>a+r.importe,0)*100)}
 function planCta(c,e,usd){const O=e==='Agrosoluciones'?'El Paye':'Agrosoluciones',cu=Math.round(usd*100),p1=Math.max(0,pendCta(c,e)),p2=Math.max(0,pendCta(c,O)),a1=Math.min(cu,p1),resto=cu-a1,a2=CTA_OTRA?Math.min(resto,p2):0;return {e,O,p1,p2,a1,a2,resto,sobra:resto-a2}}
 function htmlCta(c,e,usd){const pl=planCta(c,e,usd||0),f=x=>money(x/100,'USD');
-  let h=`<div class="mut">Saldo vencido de este cliente: ${['Agrosoluciones','El Paye'].map(x=>`<b>${x}</b> ${f(pendCta(c,x))}`).join(' · ')}</div>`;
+  let h=`<div class="mut">Deuda de este cliente (vencido y a vencer): ${['Agrosoluciones','El Paye'].map(x=>`<b>${x}</b> ${f(pendCta(c,x))}`).join(' · ')}</div>`;
   if(!(usd>0))return {h,pl};
-  h+=`<div class="mut">${pl.a1?`Se descuentan ${f(pl.a1)} del saldo vencido de ${E(e)}.`:`${E(e)} no tiene saldo vencido pendiente.`}</div>`;
+  h+=`<div class="mut">${pl.a1?`Se cancelan ${f(pl.a1)} de la deuda de ${E(e)}: primero el saldo vencido y luego los meses siguientes, hasta donde alcance.`:`${E(e)} no tiene deuda pendiente.`}</div>`;
   if(pl.resto>0&&pl.p2>0)h+=`<label class="row" style="margin:6px 0"><input type="checkbox" id="qo" ${CTA_OTRA?'checked':''}> Aplicar el sobrante (${f(pl.resto)}) a ${E(pl.O)}, que debe ${f(pl.p2)}${CTA_OTRA&&pl.a2?` → se descuentan ${f(pl.a2)}`:''}</label>`;
-  if(pl.sobra>0)h+=`<div class="err">El pago supera lo pendiente. Los ${f(pl.sobra)} sobrantes se guardan como <b>saldo a favor</b> del cliente (${E(e)}).</div>`;
+  if(pl.sobra>0)h+=`<div class="err">El pago supera la deuda total del cliente en ${E(e)}. Solo los ${f(pl.sobra)} excedentes se guardan como <b>saldo a favor</b>.</div>`;
   return {h,pl}}
 async function ejecutarCta(c,pl,pesos,tc,fecha,nota,vendedor,mr){mr=mr||{};
   const pago=async(emp,cents)=>{if(cents>0)await api(pesos?{a:'pagoCuenta',empresa:emp,cliente:c,monedaPago:'ARS',montoPago:Math.round(cents/100*tc*100)/100,tc,fecha,nota,...mr}:{a:'pagoCuenta',empresa:emp,cliente:c,importe:cents/100,fecha,nota,...mr})};
@@ -177,7 +177,7 @@ function panelPago(c,R,F){
       if(pesos&&!(tc>0)){v.innerHTML=tabla+htmlCta(c,e,0).h+'<div class="mut">Ingresá el tipo de cambio para convertir el pago a US$.</div>';ligar();return}
       if(!(impN>0)&&!credSel){v.innerHTML=tabla+htmlCta(c,e,0).h+'<div class="mut">Ingresá el importe del pago para ver cómo se aplica.</div>';ligar();return}
       const usdCash=pesos?r2(impN/tc):impN,usd=r2(usdCash+credSel),{h,pl}=htmlCta(c,e,usd);
-      v.innerHTML=`${tabla}${pesos?`<div class="mut">$ ${pf(impN)} a TC ${tcf(tc)} = <b>${money(usdCash,'USD')}</b>${credSel?` + saldo a favor ${money(credSel,'USD')} = <b>${money(usd,'USD')}</b>`:''}</div>`:credSel?`<div class="mut">${money(usdCash,'USD')} + saldo a favor ${money(credSel,'USD')} = <b>${money(usd,'USD')}</b></div>`:''}${h}<div class="mut">Lo que se paga de períodos a vencer baja el total del cliente; se descuenta primero del saldo vencido y el resto queda como saldo a favor.</div><button class="pill pri" id="qg">Registrar pago</button>`;
+      v.innerHTML=`${tabla}${pesos?`<div class="mut">$ ${pf(impN)} a TC ${tcf(tc)} = <b>${money(usdCash,'USD')}</b>${credSel?` + saldo a favor ${money(credSel,'USD')} = <b>${money(usd,'USD')}</b>`:''}</div>`:credSel?`<div class="mut">${money(usdCash,'USD')} + saldo a favor ${money(credSel,'USD')} = <b>${money(usd,'USD')}</b></div>`:''}${h}<div class="mut">El pago cancela primero el saldo vencido y luego los meses siguientes, hasta donde alcance. Solo el excedente sobre la deuda total queda como saldo a favor. Los saldos cancelados dejan de figurar en la deuda del cliente.</div><button class="pill pri" id="qg">Registrar pago</button>`;
       plan={cuenta:true,pl,pesos,tc,fu,V:Vsel};$('#qg').onclick=ejecutar;ligar();const o=$('#qo');if(o)o.onchange=()=>{CTA_OTRA=o.checked;calc()};return}
     const dif=['Cheque','eCheq'].includes($('#qd').value),tcC=parseFloat(tcv.value);
     if(conv&&!(tcC>0)){v.innerHTML='<div class="mut">Las facturas están en US$ y el pago es en pesos: ingresá el TC de cobro para convertir.</div>';return}
